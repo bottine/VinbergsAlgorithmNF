@@ -1,0 +1,19 @@
+module VinbergsAlgorithmNF
+
+    using Hecke
+    using ToggleableAsserts
+    using CoxeterDiagrams
+    using Convex, COSMO, Cbc
+
+    import MathOptInterface
+    import AbstractAlgebra
+    import LinearAlgebra
+
+    include("util.jl")
+    include("fields.jl")
+    include("quad_forms.jl")
+    include("vinbergs_algo.jl")
+
+    export VinbergData,roots_at_distance_zero,cone_roots
+
+end # module
