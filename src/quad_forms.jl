@@ -127,7 +127,11 @@ function crystallographic_condition(space,ring,vector)
 end
 
 
-function is_root(space,ring,vector)
+function is_root(
+    space::Hecke.QuadSpace,
+    ring::NfAbsOrd,
+    vector::Vector,
+)
 
     @debug "is_root($vector)"
 

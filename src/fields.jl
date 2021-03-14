@@ -66,7 +66,8 @@ function elem_lcm(ring,elems)
     
 end
 
-divides(a,b,ring) = b ∈ ideal(ring,a)
+divides(a::NfAbsOrdElem{AnticNumberField,nf_elem},b::NfAbsOrdElem{AnticNumberField,nf_elem},ring) = b.elem_in_nf//a.elem_in_nf ∈ ring
+divides(a,b,ring) = divides(ring(a),ring(b),ring)
 
 function t2_exact(x::S) where S <: NumFieldElem
     @assert istotally_real(parent(x))

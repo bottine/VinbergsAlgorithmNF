@@ -23,7 +23,7 @@ function VinbergData(number_field,gram_matrix)
 
     @assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
 
-    return VinbergData(n,number_field,ring_of_integers,gram_matrix,quad_space,possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space))
+    return VinbergData(n,number_field,ring_of_integers,gram_matrix,quad_space,ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
 
 end
 
@@ -36,7 +36,7 @@ end
 diag(vd::VinbergData) = [vd.gram_matrix[i,i] for i in 1:vd.dim]
 
 function basepoint(vd::VinbergData)
-    @assert LinearAlgebra.isdiag(vd.gram_matrix) "Sanity check"
+    @assert isdiagonal(vd.gram_matrix) "Sanity check"
     @assert diag(vd)[1] < 0 "Sanity check"
 
     return vd.field.(vcat([1],zeros(Int,vd.dim-1)))
@@ -50,9 +50,9 @@ norm_squared(vd::VinbergData,u) = times(vd.quad_space,u,u)
 
 function fake_dist_to_basepoint(vd,u)
     
-    @toggled_assert diag(vd)[1]*u[1]^2//norm_squared(vd,u) == times(vd,u,basepoint(vd))//norm_squared(vd,u)
+    @toggled_assert (diag(vd)[1]*u[1])^2//norm_squared(vd,u) == times(vd,u,basepoint(vd))^2//norm_squared(vd,u)
 
-    return diag(vd)[1]*u[1]^2//norm_squared(vd,u)
+    return (diag(vd)[1]*u[1])^2//norm_squared(vd,u)
 end
 
 
@@ -68,10 +68,16 @@ LeastKByRootNormSquared = Dict{
 }
 
 
-
+K,a = quadratic_field(5)
+badguy =  [-1//2*a + 3//2, -1//2*a + 1//2, 0, 0, -1//2*a + 3//2]
+badl = -a + 3
 
 function enumerate_k(vd::VinbergData,l,k_min,k_max)
-    
+   
+    if badl == l
+        @warn "at badl"
+    end
+
     ring = vd.ring
     field = vd.field
 
@@ -119,6 +125,7 @@ function next_min_k_for_l(vd,current_k,remaining_k,l)
         sort!(remaining_k)
         k_min,k_max = k_max,k_max+10
     end
+
     new_k = popfirst!(remaining_k)
     return (new_k,remaining_k)
 end
@@ -172,19 +179,22 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
     zero_from(v,i) = all(==(0),v[i:end])
     
     j = length(stem) + 1
+ 
+    #@info "stem is $stem"
+    #@info "bounds are:"
+    #@info "$([(r[j:end],b) for (r,b) in bounds])"
    
-    
+    #=
     if any( bound < 0 && zero_from(root,j) for (root, bound) in bounds)
+        #@info "and out!"
         return Vector{nf_elem}()
     end
-    
-        println("nokill")
+    =#
 
     @assert isdiagonal(vd.gram_matrix)
     field = vd.field
     ring = vd.ring
     space = vd.quad_space
-    d = [vd.gram_matrix[i,i] for i in 1:vd.dim]
     P = infinite_places(field)
 
 
@@ -198,12 +208,12 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
 
         #@info tab * "stem is complete"
 
-        if is_root(space,ring,stem) && times(vd,stem,stem) == l
+        if is_root(space,ring,field.(stem)) && times(vd,stem,stem) == l
             #@info tab * "and it's a root of length $l"
-            return [stem]
+            return Vector{Vector{NfAbsOrdElem}}([ring.(stem)])
         else
             #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
-            return Vector{nf_elem}()
+            return Vector{Vector{NfAbsOrdElem}}()
         end
     else
         
@@ -212,13 +222,13 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
 
         α = diag(vd)[j]
         S_j = l - sum([diag(vd)[i]*stem[i]^2 for i in 1:length(stem)]) 
-        candidates_k_j = non_neg_short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j//α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
+        candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j//α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
 
         candidates_k_j = vcat(candidates_k_j, .- candidates_k_j)
+        push!(candidates_k_j,ring(0))
         
         #@info tab * "candidates for j=$j are $candidates_k_j"
 
-        #filter!(≥(0),candidates_k_j)
         #@info tab * "only pos            are $candidates_k_j"
         
         filter!(
@@ -288,7 +298,19 @@ function roots_for_ratio(vd,ratio,prev_roots)
 
     @info "roots_for_ratio($ratio,$prev_roots)"
     roots = extend_root_stem(vd,[k],l,[(prev_root,0) for prev_root in prev_roots])
-    @info "got $(length(roots))"
+    
+    !all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots) && @info "some bad angles"
+    !all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) && @info "some bad sides"
+    !all(is_root(vd.quad_space,vd.ring,root) for root in roots) && @info "some not roots"
+    
+    filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
+    filter!(root -> times(vd,root,basepoint(vd)) ≤ 0, roots)
+    filter!(root -> is_root(vd.quad_space,vd.ring,root), roots)
+    
+    #@info "got $(length(roots))"
+    for r in roots
+        @info "got $r (k = $(r[1]), l = $(norm_squared(vd,r)), dist = $(fake_dist_to_basepoint(vd,r)))"
+    end
     return roots
     
 end
@@ -306,9 +328,11 @@ function next_n_roots!(vd,prev_roots,dict,das;n=1)
     roots = prev_roots
 
     #Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
-    
+    rounds = 100 
     new_roots = []
-    while n > 0
+    while n > 0 && rounds > 0 
+
+        rounds = rounds-1
 
         new_roots = roots_for_next_ratio!(vd,dict,roots)
         n = n - length(new_roots)
@@ -320,11 +344,11 @@ function next_n_roots!(vd,prev_roots,dict,das;n=1)
 
 
         if is_finite_volume(das)
-            return (true,roots,dict,das)
+            return (true,(roots,dict,das))
         end
     end
 
-    return (false,roots,dict,das)
+    return (false,(roots,dict,das))
 end
 
 function next_n_roots!(vd,prev_roots;n=1)
