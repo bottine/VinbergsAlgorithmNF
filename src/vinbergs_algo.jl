@@ -68,16 +68,9 @@ LeastKByRootNormSquared = Dict{
 }
 
 
-K,a = quadratic_field(5)
-badguy =  [-1//2*a + 3//2, -1//2*a + 1//2, 0, 0, -1//2*a + 3//2]
-badl = -a + 3
 
 function enumerate_k(vd::VinbergData,l,k_min,k_max)
    
-    if badl == l
-        @warn "at badl"
-    end
-
     ring = vd.ring
     field = vd.field
 
@@ -201,14 +194,13 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
     # stem = [k₀,…,k_j]
 
     l = root_length
-    tab = "  "^j
     #@info tab * "extend_root_stem($stem, $root_length)"
 
     if j == vd.dim + 1
 
         #@info tab * "stem is complete"
 
-        if is_root(space,ring,field.(stem)) && times(vd,stem,stem) == l
+        if times(vd,stem,stem) == l && is_root(space,ring,field.(stem),l)
             #@info tab * "and it's a root of length $l"
             return Vector{Vector{NfAbsOrdElem}}([ring.(stem)])
         else
@@ -296,16 +288,16 @@ end
 function roots_for_ratio(vd,ratio,prev_roots)
     (k,l) = ratio
 
-    @info "roots_for_ratio($ratio,$prev_roots)"
+    #@info "roots_for_ratio($ratio,$prev_roots)"
     roots = extend_root_stem(vd,[k],l,[(prev_root,0) for prev_root in prev_roots])
     
     !all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots) && @info "some bad angles"
-    !all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) && @info "some bad sides"
-    !all(is_root(vd.quad_space,vd.ring,root) for root in roots) && @info "some not roots"
+    
+    @toggled_assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
+    @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
+    @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
     
     filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
-    filter!(root -> times(vd,root,basepoint(vd)) ≤ 0, roots)
-    filter!(root -> is_root(vd.quad_space,vd.ring,root), roots)
     
     #@info "got $(length(roots))"
     for r in roots
@@ -326,13 +318,10 @@ end
 function next_n_roots!(vd,prev_roots,dict,das;n=1)
 
     roots = prev_roots
-
     #Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
-    rounds = 100 
     new_roots = []
-    while n > 0 && rounds > 0 
+    while n > 0 
 
-        rounds = rounds-1
 
         new_roots = roots_for_next_ratio!(vd,dict,roots)
         n = n - length(new_roots)
@@ -352,6 +341,8 @@ function next_n_roots!(vd,prev_roots,dict,das;n=1)
 end
 
 function next_n_roots!(vd,prev_roots;n=1)
+        
+        @info "prev_roots is $prev_roots"
 
         Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
         das = build_diagram_and_subs(Coxeter_matrix,vd.dim-1)
@@ -362,6 +353,8 @@ end
 
 function next_n_roots!(vd;n=1)
     roots = cone_roots(vd)
+
+    @info "roots is $roots"
 
     return next_n_roots!(vd,roots;n=n)
 end

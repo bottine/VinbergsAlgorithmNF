@@ -56,37 +56,6 @@ end
 
 
 
-function Coxeter_coeff(space, ring, r₁, r₂)
-    
-    @toggled_assert is_root(space, ring, r₁) && is_root(space, ring, r₂) "The elements must be roots"
-
-    angle = Hecke.inner_product(space,r₁,r₂)
-    cos² = approx(angle^2//(Hecke.inner_product(space,r₁,r₁)*Hecke.inner_product(space,r₂,r₂)))
-    if cos² == 0
-        return 2
-    elseif cos² == 1
-        return 0
-    elseif cos² > 1
-        return 1
-    else
-
-        #   cos(π/m)² = r₁⋅r₂ / r₁² r₂² 
-        # ⇒ cos(π/m) = √(r₁⋅r₂/r₁r₂)
-        # ⇒ m = π/acos(√(r₁⋅r₂/r₁r₂))
-
-        # TODO Is this rounding dangerous?
-        #      Can the angle be different from a submultiple of π? if yes, how to deal with it?
-
-        m = round(Int, π/acos(√cos²))
-
-        return m
-    end
-
-end
-
-get_Coxeter_matrix(space, ring, roots) = reduce(hcat,[[Coxeter_coeff(space, ring, r₁,r₂) for r₁ in roots] for r₂ in roots])
-
-
 
 
 function is_integral(space,ring,vector)
@@ -100,42 +69,51 @@ function is_integral(space,ring,vector)
     return true
 end
 
-function has_positive_norm(space,ring,vector)
-    field = space.K
+function has_positive_norm_squared(space,ring,vector,norm_sq)
     
-    l = Hecke.inner_product(space,vector,vector)
-
-    if l ≤ 0 
+    @toggled_assert norm_sq == norm_squared(space,vector) "Precomputed norm² must equal actual norm²."
+    
+    if norm_sq ≤ 0 
         return false
     end
     return true
+end
+
+function has_positive_norm_squared(space,ring,vector)
+    norm_sq = Hecke.inner_product(space,vector,vector)
+    return has_positive_norm_squared(space,ring,vector,norm_sq)
 end
 
 function is_primitive(space,ring,vector)
     return isunit(ideal_gcd(ring,vector))
 end
 
-function crystallographic_condition(space,ring,vector)
-    l = Hecke.inner_product(space,vector,vector)
-
+function crystallographic_condition(space,ring,vector,norm_sq)
     for b in eachcol(LinearAlgebra.I(length(vector)))
-        if  !divides(l,2*Hecke.inner_product(space,collect(b),vector),ring)
+        if  !divides(norm_sq,2*Hecke.inner_product(space,collect(b),vector),ring)
             return false
         end
     end
     return true
 end
 
+function crystallographic_condition(space,ring,vector)
+    norm_sq = Hecke.inner_product(space,vector,vector)
+    return crystallographic_condition(space,ring,vector,norm_sq)
+end
 
 function is_root(
     space::Hecke.QuadSpace,
     ring::NfAbsOrd,
     vector::Vector,
+    norm_sq,
 )
+
+    @toggled_assert norm_sq == norm_squared(space,vector) "Precomputed norm² must equal actual norm²."
 
     @debug "is_root($vector)"
 
-    !has_positive_norm(space,ring,vector) && return false
+    !has_positive_norm_squared(space,ring,vector,norm_sq) && return false
     
     @debug "✓ positive length"
 
@@ -147,7 +125,7 @@ function is_root(
     
     @debug "✓ primitive"
 
-    !crystallographic_condition(space,ring,vector) && return false 
+    !crystallographic_condition(space,ring,vector,norm_sq) && return false 
     
     @debug "✓ crystallographic"
 
@@ -158,6 +136,14 @@ function is_root(
 
 end
 
+function is_root(
+    space::Hecke.QuadSpace,
+    ring::NfAbsOrd,
+    vector::Vector,
+)
+    norm_sq = norm_squared(space,vector)
+    return is_root(space,ring,vector,norm_sq)
+end
 
 function possible_root_norms_squared_up_to_squared_units(
     ring,
@@ -200,3 +186,36 @@ function possible_root_norms_squared_up_to_squared_units(
     return [ring(l) for l in unique(all_root_norms)]
 
 end
+
+
+
+function Coxeter_coeff(space, ring, r₁, r₂)
+    
+    @toggled_assert is_root(space, ring, r₁) && is_root(space, ring, r₂) "The elements must be roots"
+
+    angle = Hecke.inner_product(space,r₁,r₂)
+    cos² = approx(angle^2//(Hecke.inner_product(space,r₁,r₁)*Hecke.inner_product(space,r₂,r₂)))
+    if cos² == 0
+        return 2
+    elseif cos² == 1
+        return 0
+    elseif cos² > 1
+        return 1
+    else
+
+        #   cos(π/m)² = r₁⋅r₂ / r₁² r₂² 
+        # ⇒ cos(π/m) = √(r₁⋅r₂/r₁r₂)
+        # ⇒ m = π/acos(√(r₁⋅r₂/r₁r₂))
+
+        # TODO Is this rounding dangerous?
+        #      Can the angle be different from a submultiple of π? if yes, how to deal with it?
+
+        m = round(Int, π/acos(√cos²))
+
+        return m
+    end
+
+end
+
+get_Coxeter_matrix(space, ring, roots) = reduce(hcat,[[Coxeter_coeff(space, ring, r₁,r₂) for r₁ in roots] for r₂ in roots])
+
