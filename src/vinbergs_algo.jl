@@ -331,8 +331,11 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10)
     return (false,(roots,dict,das))
 end
 
-function next_n_roots!(vd,prev_roots;n=10)
-        
+function next_n_roots!(
+    vd::VinbergData,
+    prev_roots;
+    n=10
+)
 
         Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
         das = build_diagram_and_subs(Coxeter_matrix,vd.dim-1)
@@ -341,9 +344,24 @@ function next_n_roots!(vd,prev_roots;n=10)
         return next_n_roots!(vd,prev_roots,dict,das;n=n)
 end
 
-function next_n_roots!(vd;n=10)
+function next_n_roots!(
+    vd::VinbergData;
+    n=10,
+)
     roots = cone_roots(vd)
 
     return next_n_roots!(vd,roots;n=n)
 end
 
+function all_in_one(
+    diagonal::Vector{nf_elem},
+    n::Int
+)
+    @assert n>0 && n≤100 "Need a reasonable number of roots to look for."
+    @assert length(diagonal) > 2 "Need to have a long enough diagonal."
+    @assert all(parent(v) == parent(diagonal[1]) for v in diagonal) "The elements of the diagonal must lie in a common field."
+    
+    field = parent(diagonal[1])
+
+    return next_n_roots!(VinbergData(field,diagm(diagonal)),n=n)
+end
