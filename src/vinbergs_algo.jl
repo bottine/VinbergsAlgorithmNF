@@ -143,7 +143,7 @@ function init_least_k_by_root_norm_squared(vd::VinbergData)
 end
 
 
-function next_min_ratio(vd,dict)
+function next_min_pair(vd,dict)
     field = vd.field
     min_pair = nothing
 
@@ -159,9 +159,9 @@ function next_min_ratio(vd,dict)
     return min_pair
 end
 
-function next_min_ratio!(vd,dict)
+function next_min_pair!(vd,dict)
     
-    min_pair = next_min_ratio(vd,dict)
+    min_pair = next_min_pair(vd,dict)
     next_min_k_for_l!(vd,dict,min_pair[2])
     return min_pair
 end
@@ -177,12 +177,11 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
     #@info "bounds are:"
     #@info "$([(r[j:end],b) for (r,b) in bounds])"
    
-    #=
+    
     if any( bound < 0 && zero_from(root,j) for (root, bound) in bounds)
-        #@info "and out!"
-        return Vector{nf_elem}()
+        return Vector{Vector{nf_elem}}()
     end
-    =#
+    
 
     @assert isdiagonal(vd.gram_matrix)
     field = vd.field
@@ -200,7 +199,7 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
 
         #@info tab * "stem is complete"
 
-        if times(vd,stem,stem) == l && is_root(space,ring,field.(stem),l)
+        if times(vd,stem,stem) == l && is_root(space,ring,field.(stem),l) # this is partially redundant since the crystallographic condition should hold already, as the integralness
             #@info tab * "and it's a root of length $l"
             return Vector{Vector{NfAbsOrdElem}}([ring.(stem)])
         else
@@ -219,20 +218,17 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
         candidates_k_j = vcat(candidates_k_j, .- candidates_k_j)
         push!(candidates_k_j,ring(0))
         
-        #@info tab * "candidates for j=$j are $candidates_k_j"
-
-        #@info tab * "only pos            are $candidates_k_j"
         
         filter!(
             k-> all(≤(field(α*k^2),field(S_j),p) for p in P),
             candidates_k_j
         )
-        #@info tab * "OK norm             are $candidates_k_j"
+        
         filter!(
             k -> divides(l,2*k*α,ring),
             candidates_k_j,    
         )
-        #@info tab * "OK crystal          are $candidates_k_j"
+        
         bounds_updated(k) = [(r,b - diag(vd)[j]*k*r[j]) for (r,b) in bounds]
 
         return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in candidates_k_j]...)
@@ -285,37 +281,32 @@ function cone_roots(vd)
     cone_roots(vd,roots_at_distance_zero(vd))
 end
 
-function roots_for_ratio(vd,ratio,prev_roots)
-    (k,l) = ratio
+function roots_for_pair(vd,pair,prev_roots)
+    (k,l) = pair
 
-    #@info "roots_for_ratio($ratio,$prev_roots)"
-    roots = extend_root_stem(vd,[k],l,[(prev_root,0) for prev_root in prev_roots])
+    #@info "roots_for_pair($pair,$prev_roots)"
+    roots = extend_root_stem(vd,[k],l,[(prev_root,-k*diag(vd)[1]*prev_root[1]) for prev_root in prev_roots])
     
-    !all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots) && @info "some bad angles"
-    
+    @toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles should be good"
     @toggled_assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
     @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
     
     filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
     
-    #@info "got $(length(roots))"
-    for r in roots
-        @info "got $r (k = $(r[1]), l = $(norm_squared(vd,r)), dist = $(fake_dist_to_basepoint(vd,r)))"
-    end
     return roots
     
 end
 
-function roots_for_next_ratio!(vd,dict,prev_roots)
-    ratio = next_min_ratio!(vd,dict)
+function roots_for_next_pair!(vd,dict,prev_roots)
+    pair = next_min_pair!(vd,dict)
 
-    # Here we should assert that the roots in prev_roots are actually closer than the next min ratio can give us, otherwise we will get inconsistencies
+    # Here we should assert that the roots in prev_roots are actually closer than the next min pair can give us, otherwise we will get inconsistencies
 
-    return roots_for_ratio(vd,ratio,prev_roots)
+    return roots_for_pair(vd,pair,prev_roots)
 end
 
-function next_n_roots!(vd,prev_roots,dict,das;n=1)
+function next_n_roots!(vd,prev_roots,dict,das;n=10)
 
     roots = prev_roots
     #Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
@@ -323,7 +314,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=1)
     while n > 0 
 
 
-        new_roots = roots_for_next_ratio!(vd,dict,roots)
+        new_roots = roots_for_next_pair!(vd,dict,roots)
         n = n - length(new_roots)
 
         for root in new_roots 
@@ -340,9 +331,8 @@ function next_n_roots!(vd,prev_roots,dict,das;n=1)
     return (false,(roots,dict,das))
 end
 
-function next_n_roots!(vd,prev_roots;n=1)
+function next_n_roots!(vd,prev_roots;n=10)
         
-        @info "prev_roots is $prev_roots"
 
         Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
         das = build_diagram_and_subs(Coxeter_matrix,vd.dim-1)
@@ -351,10 +341,8 @@ function next_n_roots!(vd,prev_roots;n=1)
         return next_n_roots!(vd,prev_roots,dict,das;n=n)
 end
 
-function next_n_roots!(vd;n=1)
+function next_n_roots!(vd;n=10)
     roots = cone_roots(vd)
-
-    @info "roots is $roots"
 
     return next_n_roots!(vd,roots;n=n)
 end
