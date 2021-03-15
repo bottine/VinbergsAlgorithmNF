@@ -88,7 +88,7 @@ function short_t2_elems(O::NfAbsOrd, lb, ub)
 
 
 
-    @assert all(lb-1 ≤ t2(c) && t2(c) ≤ ub+1 for c in candidates)
+    @toggled_assert all(lb-1 ≤ t2(c) && t2(c) ≤ ub+1 for c in candidates)
     return candidates
 end
 

@@ -170,6 +170,8 @@ function possible_root_norms_squared_up_to_squared_units(
     # then taking the ideal (I:J) = \{x: xI ⊆ J\}
     # then multiplying by the ideal ⟨2⟩
     # Probably one can do something cleaner
+    #
+    # TODO: probably can get the last invariant factor from Smith Normal Form (should exist in Hecke)
     twice_last_invariant_factor = ideal(ring,2)*colon(ideal(ring,ring(det(gram))),gcd_cofactors)
     twice_last_invariant_factor_factors = Hecke.factor(twice_last_invariant_factor)
     @assert all(Hecke.isprincipal(idl)[1] for idl in keys(twice_last_invariant_factor_factors))
@@ -188,6 +190,28 @@ function possible_root_norms_squared_up_to_squared_units(
 end
 
 
+function colinear(
+    r₁::Vector,
+    r₂::Vector,
+)
+    
+    @toggled_assert length(r₁) == length(r₂)    
+    n = length(r₁)
+    @toggled_assert n > 0
+    
+    ratio = nothing
+    for (c₁,c₂) in zip(r₁,r₂)
+        c₁ == 0 && c₂ == 0 && continue
+        c₁ == 0 && c₂ ≠ 0  && return false
+        c₁ ≠ 0 && c₂ == 0  && return false
+        !isnothing(ratio) && c₁*ratio ≠ c₂ && return false
+        
+        isnothing(ratio) && (ratio = c₂//c₁)
+    end
+
+    return true
+
+end
 
 function Coxeter_coeff(space, ring, r₁, r₂)
     

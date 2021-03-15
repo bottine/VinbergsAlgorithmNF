@@ -291,6 +291,7 @@ function roots_for_pair(vd,pair,prev_roots)
     @toggled_assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
     @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
+    @toggled_assert all(r₁ == r₂ || times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots) "Two roots at same distance to basepoint, and both compatible with previous ones, should be compatible with each other: why?"
     
     filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
     
@@ -318,6 +319,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10)
         n = n - length(new_roots)
 
         for root in new_roots 
+            @info "Got new root $root"
             extend!(das,[Coxeter_coeff(vd.quad_space, vd.ring, old,root) for old in roots])
             push!(roots,vd.field.(root))
         end
