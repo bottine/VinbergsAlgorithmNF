@@ -292,7 +292,8 @@ function roots_for_pair(vd,pair,prev_roots)
     @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
     @toggled_assert all(r₁ == r₂ || times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots) "Two roots at same distance to basepoint, and both compatible with previous ones, should be compatible with each other: why?"
-    
+   
+    # just in case
     filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
     
     return roots
