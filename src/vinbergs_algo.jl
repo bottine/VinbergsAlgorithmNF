@@ -222,11 +222,11 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
     #@info "bounds are:"
     #@info "$([(r[j:end],b) for (r,b) in bounds])"
    
-    #= 
+     
     if any( bound < 0 && zero_from(root,j) for (root, bound) in bounds)
         return Vector{Vector{nf_elem}}()
     end
-    =#
+    
 
     field = vd.field
     ring = vd.ring
@@ -337,7 +337,7 @@ end
 function roots_for_pair(vd,pair,prev_roots)
     (k,l) = pair
 
-    prev_roots_as_diagonals = [vd.diagonal_change_inv*prev_root for prev_root in prev_roots]
+    prev_roots_as_diagonals = [vd.diagonal_change*prev_root for prev_root in prev_roots]
     #@info "roots_for_pair($pair,$prev_roots)"
     roots = extend_root_stem(vd,[k],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals])
     
