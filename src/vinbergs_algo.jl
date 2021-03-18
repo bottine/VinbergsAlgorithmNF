@@ -1,17 +1,18 @@
 
 mutable struct VinbergData
+
     dim::Int
     field::AnticNumberField
     ring::NfAbsOrd{AnticNumberField,nf_elem}
     gram_matrix::AbstractAlgebra.Generic.MatSpaceElem{nf_elem}
     quad_space::Hecke.QuadSpace{AnticNumberField,AbstractAlgebra.Generic.MatSpaceElem{nf_elem}}
 
-    diagonal_basis
-    diagonal_values
-    scaling
+    diagonal_basis::Vector{Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}}
+    diagonal_values::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+    scaling::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
     
-    diagonal_change
-    diagonal_change_inv
+    diagonal_change::Array{nf_elem,2}
+    diagonal_change_inv::Array{nf_elem,2}
 
 
     possible_root_norms_squared_up_to_squared_units::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
@@ -217,6 +218,9 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
     zero_from(v,i) = all(==(0),v[i:end])
     
     j = length(stem) + 1
+    
+    # helper function: update the bounds given by letting the next coeff be k
+    bounds_updated(k) = [(r,b - vd.diagonal_values[j]*k*r[j]) for (r,b) in bounds]
  
     #@info "stem is $stem"
     #@info "bounds are:"
@@ -240,10 +244,11 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
     #@info tab * "extend_root_stem($stem, $root_length)"
 
     if j == vd.dim + 1
-
-        #@info tab * "stem is complete"
+        
+        #By the case j== vd.dim, the length should already be 
 
         as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
+        @toggled_assert times(vd,as_lattice_element,as_lattice_element) == l 
 
         if is_integral(space, ring, as_lattice_element) &&
             times(vd,as_lattice_element,as_lattice_element) == l && 
@@ -253,6 +258,24 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
             return Vector{Vector{NfAbsOrdElem}}([ring.(as_lattice_element)])
         else
             #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
+            return Vector{Vector{NfAbsOrdElem}}()
+        end
+    elseif j == vd.dim
+      
+        # If k₁,…,k_{j-1} are chosen and k_j is the last one that needs to be found.
+        # If (α₁,…,α_j) is the diagonalized inner product, and r = (k₁,…,k_j) the root to be found, of normed² == l, then
+        # We have
+        # 
+        #   ∑_{i=1}^{j-1} k_i^2α_i + k_j^2α_j == normed²(r) == l 
+        #
+        # Which means k_j^2 = (l - ∑_{i=1}^{j-1}k_i^2α_i)/α_j.
+
+        issquare,square_root = Hecke.issquare((l - sum([stem[i]^2*vd.diagonal_values[i] for i in 1:j-1]))//vd.diagonal_values[j])
+        
+        if issquare
+             
+            return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in unique([square_root,-square_root])]...)            
+        else
             return Vector{Vector{NfAbsOrdElem}}()
         end
     else
@@ -281,7 +304,6 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
             candidates_k_j,    
         )
         
-        bounds_updated(k) = [(r,b - vd.diagonal_values[j]*k*r[j]) for (r,b) in bounds]
 
         return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in candidates_k_j]...)
     end

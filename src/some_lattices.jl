@@ -66,10 +66,11 @@ gram_E6 = [
     0  0  0  0 -1  2
 ]
 
-Krat,arat = Hecke.rationals_as_number_field()
-K2,a2 = Hecke.quadratic_field(2)
-K5,a5 = Hecke.quadratic_field(5)
+# Can't do this here: https://github.com/Nemocas/Nemo.jl/issues/810
+#Krat,arat = Hecke.rationals_as_number_field()
+#K2,a2 = Hecke.quadratic_field(2)
+#K5,a5 = Hecke.quadratic_field(5)
 
-Bug8 = (a5-1) .* K5.(I_)  ⊕ K5.(gram_E8)
+#Bug8 = (a5-1) .* K5.(I_)  ⊕ K5.(gram_E8)
 
 

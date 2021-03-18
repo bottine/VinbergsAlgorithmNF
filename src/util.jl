@@ -58,7 +58,6 @@ function diagonalize(ring,A::Matrix)
     P = Q'
    
 
-
     @assert LinearAlgebra.isdiag(D) "D is diagonal", D
     @assert P'*A*P == D "We have a diagonalization (part 1)"
     #@assert A == inv(P')*D*inv(P) "We have a diagonalization (part 2)"

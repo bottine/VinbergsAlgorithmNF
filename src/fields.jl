@@ -114,7 +114,7 @@ function diagm(K::AnticNumberField,diag)
     for i in 1:n
         M[i,i] = K(diag[i])
     end
-    return matrix(K,M)
+    return K.(M)
 end
 
 function diagm(diag::Vector{nf_elem})
