@@ -189,6 +189,21 @@ function possible_root_norms_squared_up_to_squared_units(
 
 end
 
+function diagonalize_and_get_scaling(gram,ring,field)
+
+    @assert LinearAlgebra.issymmetric(gram)
+    n = size(gram)[1]
+
+    diagonal_values,diagonal_basis = diagonalize(ring,gram)
+    diagonal_values = [diagonal_values[i,i] for i in 1:n]
+   
+    diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
+
+    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
+    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
+
+    return diagonal_basis_vecs, diagonal_values, scaling 
+end
 
 function colinear(
     r₁::Vector,
@@ -215,6 +230,7 @@ end
 
 function Coxeter_coeff(space, ring, r₁, r₂)
     
+
     @toggled_assert is_root(space, ring, r₁) && is_root(space, ring, r₂) "The elements must be roots"
 
     angle = Hecke.inner_product(space,r₁,r₂)
@@ -241,5 +257,10 @@ function Coxeter_coeff(space, ring, r₁, r₂)
 
 end
 
-get_Coxeter_matrix(space, ring, roots) = reduce(hcat,[[Coxeter_coeff(space, ring, r₁,r₂) for r₁ in roots] for r₂ in roots])
-
+function get_Coxeter_matrix(space, ring, roots) 
+    if isempty(roots)
+        reshape(Int[],0,0)
+    else
+        return reduce(hcat,[[Coxeter_coeff(space, ring, r₁,r₂) for r₁ in roots] for r₂ in roots])
+    end
+end

@@ -6,6 +6,14 @@ mutable struct VinbergData
     gram_matrix::AbstractAlgebra.Generic.MatSpaceElem{nf_elem}
     quad_space::Hecke.QuadSpace{AnticNumberField,AbstractAlgebra.Generic.MatSpaceElem{nf_elem}}
 
+    diagonal_basis
+    diagonal_values
+    scaling
+    
+    diagonal_change
+    diagonal_change_inv
+
+
     possible_root_norms_squared_up_to_squared_units::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
 end
 
@@ -16,14 +24,37 @@ function VinbergData(number_field,gram_matrix)
     @assert n == m "The Gram gram_matrix must be square."
 
     ring_of_integers = maximal_order(number_field)
-    quad_space = quadratic_space(number_field, gram_matrix)
+    quad_space = quadratic_space(number_field, matrix(number_field,gram_matrix))
     #quad_lattice = Hecke.lattice(quad_space)
-
+    
+    @assert is_feasible(quad_space) "The quadratic form must be feasible sig (n,1) and all conjugates sig (n+1,0)"
     @assert all(number_field(c) ∈ ring_of_integers for c in gram_matrix) "The Gram matrix must have coefficients in the ring of integers."
 
-    @assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
+    diagonal_basis_vecs,diagonal_values,scaling = diagonalize_and_get_scaling(gram_matrix,ring_of_integers,number_field)
+    negative_vector_index = filter(x-> x[2]<0, collect(enumerate(diagonal_values)))[1][1]
+    
+    if negative_vector_index ≠ 1
+        diagonal_basis_vecs[1],diagonal_basis_vecs[negative_vector_index] = diagonal_basis_vecs[negative_vector_index],diagonal_basis_vecs[1]
+        diagonal_values[1],diagonal_values[negative_vector_index] = diagonal_values[negative_vector_index],diagonal_values[1]
+        scaling[1],scaling[negative_vector_index] = scaling[negative_vector_index],scaling[1]
+    end
 
-    return VinbergData(n,number_field,ring_of_integers,gram_matrix,quad_space,ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
+    negative_vector_index = filter(x-> x[2]<0, collect(enumerate(diagonal_values)))[1][1]
+    @assert negative_vector_index == 1
+    #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
+
+    return VinbergData(
+        n,
+        number_field,
+        ring_of_integers,
+        matrix(number_field,gram_matrix),
+        quad_space,
+        diagonal_basis_vecs,
+        diagonal_values,
+        scaling,
+        Matrix(matrix(number_field,diagonal_basis_vecs)),
+        Matrix(inv(matrix(number_field,diagonal_basis_vecs))),
+        ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
 
 end
 
@@ -35,11 +66,20 @@ end
 
 diag(vd::VinbergData) = [vd.gram_matrix[i,i] for i in 1:vd.dim]
 
-function basepoint(vd::VinbergData)
-    @assert isdiagonal(vd.gram_matrix) "Sanity check"
-    @assert diag(vd)[1] < 0 "Sanity check"
+function to_diag_rep(vd,vec)
+    # vec is in canonical coordinattes
+    vd.diagonal_change*vec
+end
 
-    return vd.field.(vcat([1],zeros(Int,vd.dim-1)))
+function to_can_rep(vd,vec)
+    # vec is in diagonal coordinates
+    vd.diagonal_change_inv*vec
+end
+
+function basepoint(vd::VinbergData)
+    @assert vd.diagonal_values[1] < 0 "sanity check"
+
+    return vd.field.(vd.diagonal_basis[1])
 end
 
 times(quad_space::Hecke.QuadSpace,u,v) = Hecke.inner_product(quad_space,u,v)
@@ -50,9 +90,7 @@ norm_squared(vd::VinbergData,u) = times(vd.quad_space,u,u)
 
 function fake_dist_to_basepoint(vd,u)
     
-    @toggled_assert (diag(vd)[1]*u[1])^2//norm_squared(vd,u) == times(vd,u,basepoint(vd))^2//norm_squared(vd,u)
-
-    return (diag(vd)[1]*u[1])^2//norm_squared(vd,u)
+    return  times(vd,u,basepoint(vd))^2//norm_squared(vd,u)
 end
 
 
@@ -70,22 +108,28 @@ LeastKByRootNormSquared = Dict{
 
 
 function enumerate_k(vd::VinbergData,l,k_min,k_max)
-   
+    
+    #@info "enumerate_k (l=$l, k_min=$k_min, k_max=$k_max)"
+
     ring = vd.ring
     field = vd.field
 
-    α = diag(vd)[1]
+    α = vd.diagonal_values[1]
+    s = vd.scaling[1]
+
     @assert α < 0 
 
-    M = approx_sum_at_places(field(l//α),first_place_idx=2)
+    M = approx_sum_at_places(field(l*s^2)//field(α),first_place_idx=2)
     P = infinite_places(field)
-    k_min_squared_approx = approx(field(k_min^2))
-    k_max_squared_approx = approx(field(k_max^2))
+    k_min_squared_approx = approx(field((k_min*s)^2))
+    k_max_squared_approx = approx(field((k_max*s)^2))
 
-    candidates = short_t2_elems(ring, k_min_squared_approx-1 , k_max_squared_approx  + M + 1)
+    upscaled_candidates = short_t2_elems(ring, k_min_squared_approx-1 , k_max_squared_approx  + M + 1)
     # short_t2_elems only spits out non-zero stuff, and either k or -k, but not both (for any k)
 
-    map!(abs, candidates, candidates) # Ensures all are positive  
+    map!(abs, upscaled_candidates, upscaled_candidates) # Ensures all are positive  
+    
+    candidates::Vector{nf_elem} = map(k -> k.elem_in_nf//s, upscaled_candidates) # Correct the scaling  
 
     #Only k>0 # this should not be needed
     # We only need k>0 because k=0 corresponds to hyperplane containing the basepoint, treated elsewhere
@@ -104,6 +148,7 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
         candidates,
     )
       
+    #@info "enumerate_k got $candidates"
     return candidates
 end
 
@@ -177,13 +222,12 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
     #@info "bounds are:"
     #@info "$([(r[j:end],b) for (r,b) in bounds])"
    
-    
+    #= 
     if any( bound < 0 && zero_from(root,j) for (root, bound) in bounds)
         return Vector{Vector{nf_elem}}()
     end
-    
+    =#
 
-    @assert isdiagonal(vd.gram_matrix)
     field = vd.field
     ring = vd.ring
     space = vd.quad_space
@@ -199,9 +243,14 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
 
         #@info tab * "stem is complete"
 
-        if times(vd,stem,stem) == l && is_root(space,ring,field.(stem),l) # this is partially redundant since the crystallographic condition should hold already, as the integralness
+        as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
+
+        if is_integral(space, ring, as_lattice_element) &&
+            times(vd,as_lattice_element,as_lattice_element) == l && 
+            is_root(space,ring,field.(as_lattice_element),l) 
+            # this is partially redundant since the crystallographic condition should hold already, as the integralness
             #@info tab * "and it's a root of length $l"
-            return Vector{Vector{NfAbsOrdElem}}([ring.(stem)])
+            return Vector{Vector{NfAbsOrdElem}}([ring.(as_lattice_element)])
         else
             #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
             return Vector{Vector{NfAbsOrdElem}}()
@@ -211,13 +260,16 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
         #@info tab * "stem is not complete"
         
 
-        α = diag(vd)[j]
-        S_j = l - sum([diag(vd)[i]*stem[i]^2 for i in 1:length(stem)]) 
-        candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j//α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
+        α = vd.diagonal_values[j]
+        s = vd.scaling[j]
+        S_j = l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
+        upscaled_candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
 
-        candidates_k_j = vcat(candidates_k_j, .- candidates_k_j)
-        push!(candidates_k_j,ring(0))
+        candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s, upscaled_candidates_k_j)
         
+        candidates_k_j = vcat(candidates_k_j, .- candidates_k_j)
+        push!(candidates_k_j,field(0))
+       
         
         filter!(
             k-> all(≤(field(α*k^2),field(S_j),p) for p in P),
@@ -229,7 +281,7 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
             candidates_k_j,    
         )
         
-        bounds_updated(k) = [(r,b - diag(vd)[j]*k*r[j]) for (r,b) in bounds]
+        bounds_updated(k) = [(r,b - vd.diagonal_values[j]*k*r[j]) for (r,b) in bounds]
 
         return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in candidates_k_j]...)
     end
@@ -245,6 +297,7 @@ end
 
 function cone_roots(vd,roots_at_distance_zero)
 
+    @warn "Cone roots computation are approximative ⇒ double check the results by hand."
     roots_at_distance_zero = [vd.field.(root) for root in roots_at_distance_zero]
 
     # We put first the roots with integer coordinates to maximize the chance of having them in the cone roots
@@ -284,17 +337,18 @@ end
 function roots_for_pair(vd,pair,prev_roots)
     (k,l) = pair
 
+    prev_roots_as_diagonals = [vd.diagonal_change_inv*prev_root for prev_root in prev_roots]
     #@info "roots_for_pair($pair,$prev_roots)"
-    roots = extend_root_stem(vd,[k],l,[(prev_root,-k*diag(vd)[1]*prev_root[1]) for prev_root in prev_roots])
+    roots = extend_root_stem(vd,[k],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals])
     
-    @toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles should be good"
+    #@toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles should be good"
+    # just in case
+    filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
     @toggled_assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
     @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
-    @toggled_assert all(r₁ == r₂ || times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots) "Two roots at same distance to basepoint, and both compatible with previous ones, should be compatible with each other: why?"
+    @toggled_assert all(r₁ == r₂ || times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots) "Two roots at same distance to basepoint, and both compatible with previous ones, should be compatible with each other: why? ($roots)"
    
-    # just in case
-    filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
     
     return roots
     
@@ -302,6 +356,7 @@ end
 
 function roots_for_next_pair!(vd,dict,prev_roots)
     pair = next_min_pair!(vd,dict)
+    @info "next pair is $pair"
 
     # Here we should assert that the roots in prev_roots are actually closer than the next min pair can give us, otherwise we will get inconsistencies
 
@@ -336,7 +391,7 @@ end
 
 function next_n_roots!(
     vd::VinbergData,
-    prev_roots;
+    prev_roots::Vector;
     n=10
 )
 
