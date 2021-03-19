@@ -45,7 +45,7 @@ VA = VinbergsAlgorithmNF
                  0   (a-1)//2  2        -1;
                  0   0        -1         2
             ]
-            (status,output) = VA.all_in_one(K,Bel) 
+            (status,output) = VA.all_in_one(K.(Bel),10) 
         end
 
     end

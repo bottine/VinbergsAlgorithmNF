@@ -24,18 +24,26 @@ function VinbergData(number_field,gram_matrix)
     (n,m) = size(gram_matrix)
     @assert n == m "The Gram gram_matrix must be square."
 
+    @info "hello"
+
     gram_matrix = number_field.(gram_matrix)
 
     ring_of_integers = maximal_order(number_field)
     quad_space = quadratic_space(number_field, matrix(number_field,gram_matrix))
     #quad_lattice = Hecke.lattice(quad_space)
     
+    @info "Gram matrix OK?"
+
     @assert is_feasible(quad_space) "The quadratic form must be feasible sig (n,1) and all conjugates sig (n+1,0)"
     @assert all(c ∈ ring_of_integers for c in gram_matrix) "The Gram matrix must have coefficients in the ring of integers."
+   
+    @info "Yes"
 
     diagonal_basis_vecs,diagonal_values,scaling = diagonalize_and_get_scaling(gram_matrix,ring_of_integers,number_field)
     negative_vector_index = filter(x-> x[2]<0, collect(enumerate(diagonal_values)))[1][1]
-    
+   
+    @info "Diagonalized"
+
     if negative_vector_index ≠ 1
         diagonal_basis_vecs[1],diagonal_basis_vecs[negative_vector_index] = diagonal_basis_vecs[negative_vector_index],diagonal_basis_vecs[1]
         diagonal_values[1],diagonal_values[negative_vector_index] = diagonal_values[negative_vector_index],diagonal_values[1]
@@ -46,13 +54,15 @@ function VinbergData(number_field,gram_matrix)
     @assert negative_vector_index == 1
     #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
 
+    @info "Reordered"
+    
     gram_matrix::Matrix{nf_elem}
     diagonal_basis_vecs::Vector{Vector{nf_elem}}
     diagonal_values::Vector{nf_elem}
     scaling::Vector{nf_elem}
     diagonal_change = Matrix(matrix(number_field,diagonal_basis_vecs))
     diagonal_change_inv = Matrix(inv(matrix(number_field,diagonal_basis_vecs)))
-    possible_blah = [x.elem_in_nf for x in possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)]
+    possible_blah = possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)::Vector{nf_elem}
     
     return VinbergData(
         n,
@@ -100,9 +110,16 @@ times(vd::VinbergData,u,v) = times(vd.quad_space,u,v)
 norm_squared(quad_space::Hecke.QuadSpace,u) = times(quad_space,u,u)
 norm_squared(vd::VinbergData,u) = times(vd.quad_space,u,u)
 
-function fake_dist_to_basepoint(vd,u)
+
+function fake_dist_to_point(vd,point,root)
     
-    return  times(vd,u,basepoint(vd))^2//norm_squared(vd,u)
+    return  -times(vd,root,point)^2//(norm_squared(vd,root) * norm_squared(vd,point))
+
+end
+function fake_dist_to_basepoint(vd,point,root)
+    
+    return fake_dist_to_point(vd,basepoint(vd),root)
+
 end
 
 

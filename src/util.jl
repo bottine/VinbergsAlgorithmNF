@@ -118,6 +118,27 @@ function diagonalize(ring,A::Matrix)
 end
 
 
+function diagonalize_and_get_scaling(
+    gram,
+    ring,
+    field
+)::Tuple{Vector{Vector{nf_elem}},Vector{nf_elem},Vector{nf_elem}}
+
+    @assert LinearAlgebra.issymmetric(gram)
+    n = size(gram)[1]
+
+    diagonal_values,diagonal_basis = diagonalize(ring,gram)
+    diagonal_values = [diagonal_values[i,i] for i in 1:n]
+   
+    diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
+
+    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
+    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
+
+    return [field.(vec) for vec in diagonal_basis_vecs], field.(diagonal_values), field.(scaling) 
+end
+
+
 
 function diagm(K::AnticNumberField,diag)
     n = length(diag)

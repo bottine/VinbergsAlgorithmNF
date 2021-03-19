@@ -145,6 +145,8 @@ function is_root(
     return is_root(space,ring,vector,norm_sq)
 end
 
+
+
 function possible_root_norms_squared_up_to_squared_units(
     ring,
     field,
@@ -180,35 +182,16 @@ function possible_root_norms_squared_up_to_squared_units(
     prime_factors_of_root_lengths = Dict([Hecke.isprincipal(idl)[2] => mul for (idl,mul) in twice_last_invariant_factor_factors])
     all_factors_of_root_lengths = merge(prime_factors_of_root_lengths, unit_factors_of_root_lengths)
 
-    all_root_norms = 
-    filter(
-        l -> istotally_positive(field(l)),
-        products(all_factors_of_root_lengths)
-    )
-    return [ring(l) for l in unique(all_root_norms)]
+    all_root_norms = map(
+        x -> x.elem_in_nf,
+        filter(
+            l -> istotally_positive(field(l)),
+            products(all_factors_of_root_lengths)
+        ),
+    )::Vector{nf_elem}
+    return unique(all_root_norms)
 
 end
-
-function diagonalize_and_get_scaling(
-    gram,
-    ring,
-    field
-)::Tuple{Vector{Vector{nf_elem}},Vector{nf_elem},Vector{nf_elem}}
-
-    @assert LinearAlgebra.issymmetric(gram)
-    n = size(gram)[1]
-
-    diagonal_values,diagonal_basis = diagonalize(ring,gram)
-    diagonal_values = [diagonal_values[i,i] for i in 1:n]
-   
-    diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
-
-    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
-    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
-
-    return [field.(vec) for vec in diagonal_basis_vecs], field.(diagonal_values), field.(scaling) 
-end
-
 function colinear(
     r₁::Vector,
     r₂::Vector,
