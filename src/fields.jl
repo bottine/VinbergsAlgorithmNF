@@ -108,3 +108,17 @@ approx(x::NfAbsOrdElem{AnticNumberField,nf_elem}) = Float64(conjugates_real(x.el
 
 approx_sum_at_places(val;first_place_idx) = sum(convert.(Float64,conjugates_real(val,32)[first_place_idx:end]))
 
+function diagm(K::AnticNumberField,diag)
+    n = length(diag)
+    M = fill(K(0),n,n)
+    for i in 1:n
+        M[i,i] = K(diag[i])
+    end
+    return K.(M)
+end
+
+function diagm(diag::Vector{nf_elem})
+    @assert length(diag) > 0 "Need a non empty vector"
+
+    return diagm(parent(diag[1]),diag)
+end

@@ -31,23 +31,9 @@ VA = VinbergsAlgorithmNF
 
     @testset "ℚ(√5)" begin
         K,a = quadratic_field(5)
-
-        @testset "An example" begin
-            (status,output) = VA.all_in_one(K.([(-1+a)//2,1,1,1,2]),10)
-            @test status == true
-            @test all(VA.colinear(v₁,v₂) for (v₁,v₂) in zip(output[1],[[0, -1, 1, 0, 0], [0, 0, -1, 1, 0], [0, 0, 0, -1, 0], [0, 0, 0, 0, -1], [1//2*a + 3//2, 1, 0, 0, 0], [1, -1//2*a - 1//2, 0, 0, 1], [-1//2*a + 1//2, 1, 1, 1, 1]])) 
-        end
-
-        @testset "Belolipetski" begin # From the paper arXiv:1506.03111v4
-            Bel = [
-                 2  -1          0        0;
-                -1   2         (a-1)//2  0;
-                 0   (a-1)//2  2        -1;
-                 0   0        -1         2
-            ]
-            (status,output) = VA.all_in_one(K.(Bel),10) 
-        end
-
+        (status,output) = VA.all_in_one(K.([(-1+a)//2,1,1,1,2]),10)
+        @test status == true
+        @test all(VA.colinear(v₁,v₂) for (v₁,v₂) in zip(output[1],[[0, -1, 1, 0, 0], [0, 0, -1, 1, 0], [0, 0, 0, -1, 0], [0, 0, 0, 0, -1], [1//2*a + 3//2, 1, 0, 0, 0], [1, -1//2*a - 1//2, 0, 0, 1], [-1//2*a + 1//2, 1, 1, 1, 1]]))  
     end
 
     @testset "ℚ(cos(2π/7))" begin

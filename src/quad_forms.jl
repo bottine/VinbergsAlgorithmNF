@@ -62,7 +62,7 @@ function is_integral(space,ring,vector)
     field = space.K
     
     for c in vector
-        if !Hecke.in(c,ring)
+        if !Hecke.in(field(c),ring)
             return false
         end
     end
@@ -105,7 +105,7 @@ end
 function is_root(
     space::Hecke.QuadSpace,
     ring::NfAbsOrd,
-    vector::Vector{nf_elem},
+    vector::Vector,
     norm_sq,
 )
 
@@ -139,13 +139,11 @@ end
 function is_root(
     space::Hecke.QuadSpace,
     ring::NfAbsOrd,
-    vector::Vector{nf_elem},
+    vector::Vector,
 )
     norm_sq = norm_squared(space,vector)
     return is_root(space,ring,vector,norm_sq)
 end
-
-
 
 function possible_root_norms_squared_up_to_squared_units(
     ring,
@@ -182,16 +180,31 @@ function possible_root_norms_squared_up_to_squared_units(
     prime_factors_of_root_lengths = Dict([Hecke.isprincipal(idl)[2] => mul for (idl,mul) in twice_last_invariant_factor_factors])
     all_factors_of_root_lengths = merge(prime_factors_of_root_lengths, unit_factors_of_root_lengths)
 
-    all_root_norms = map(
-        x -> x.elem_in_nf,
-        filter(
-            l -> istotally_positive(field(l)),
-            products(all_factors_of_root_lengths)
-        ),
-    )::Vector{nf_elem}
-    return unique(all_root_norms)
+    all_root_norms = 
+    filter(
+        l -> istotally_positive(field(l)),
+        products(all_factors_of_root_lengths)
+    )
+    return [ring(l) for l in unique(all_root_norms)]
 
 end
+
+function diagonalize_and_get_scaling(gram,ring,field)
+
+    @assert LinearAlgebra.issymmetric(gram)
+    n = size(gram)[1]
+
+    diagonal_values,diagonal_basis = diagonalize(ring,gram)
+    diagonal_values = [diagonal_values[i,i] for i in 1:n]
+   
+    diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
+
+    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
+    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
+
+    return diagonal_basis_vecs, diagonal_values, scaling 
+end
+
 function colinear(
     r₁::Vector,
     r₂::Vector,

@@ -1,11 +1,11 @@
 
 mutable struct BoundedT2ElemsCache
     bounds::Vector{Int}
-    elems::Vector{Vector{nf_elem}}
+    elems::Vector{Vector{NfAbsOrdElem}}
 end
 
 function BoundedT2ElemsCache(ring)
-    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{nf_elem}}([[ring.nf(0)]]))
+    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{NfAbsOrdElem}}([[ring(0)]]))
 end
 
 function bounded_t2_elems(ring,bound,cache, filters = [])
@@ -16,13 +16,13 @@ function bounded_t2_elems(ring,bound,cache, filters = [])
         push!(cache.bounds,with_margin)
         new_elems = filter(
             x -> x∉cache.elems[end],
-            short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]) .|> (x->x.elem_in_nf) .|> abs,
+            short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]) .|> abs,
         )
         #sort!(new_elems,rev=true)
         push!(cache.elems, new_elems)
     end
     
-    elems = Vector{nf_elem}()
+    elems = Vector{NfAbsOrdElem}()
     i=1
     while cache.bounds[i] ≤ bound
         append!(
@@ -115,44 +115,6 @@ function diagonalize(ring,A::Matrix)
     
     return (D,P)
 
-end
-
-
-function diagonalize_and_get_scaling(
-    gram,
-    ring,
-    field
-)::Tuple{Vector{Vector{nf_elem}},Vector{nf_elem},Vector{nf_elem}}
-
-    @assert LinearAlgebra.issymmetric(gram)
-    n = size(gram)[1]
-
-    diagonal_values,diagonal_basis = diagonalize(ring,gram)
-    diagonal_values = [diagonal_values[i,i] for i in 1:n]
-   
-    diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
-
-    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
-    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
-
-    return [field.(vec) for vec in diagonal_basis_vecs], field.(diagonal_values), field.(scaling) 
-end
-
-
-
-function diagm(K::AnticNumberField,diag)
-    n = length(diag)
-    M = fill(K(0),n,n)
-    for i in 1:n
-        M[i,i] = K(diag[i])
-    end
-    return K.(M)
-end
-
-function diagm(diag::Vector{nf_elem})
-    @assert length(diag) > 0 "Need a non empty vector"
-
-    return diagm(parent(diag[1]),diag)
 end
 
 """
