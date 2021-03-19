@@ -134,7 +134,7 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
 
     #Only k>0 # this should not be needed
     # We only need k>0 because k=0 corresponds to hyperplane containing the basepoint, treated elsewhere
-    filter!(>(0),candidates)
+    @toggled_assert all(>(0),candidates)
     
    
     # crystallographic_condition
@@ -212,8 +212,14 @@ function next_min_pair!(vd,dict)
     return min_pair
 end
 
-function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
-   
+function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=nothing)
+ 
+    #@info "extend_root_stem $stem $root_length"
+
+    if t2_cache === nothing
+        t2_cache = BoundedT2ElemsCache(vd.ring) 
+    end
+
     # helper function; checks that the vector v is all zeros starting from index i
     zero_from(v,i) = all(==(0),v[i:end])
     
@@ -245,14 +251,13 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
 
     if j == vd.dim + 1
         
-        #By the case j== vd.dim, the length should already be 
 
         as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
+        
+        #By the case j== vd.dim, the length should already be == l 
         @toggled_assert times(vd,as_lattice_element,as_lattice_element) == l 
 
-        if is_integral(space, ring, as_lattice_element) &&
-            times(vd,as_lattice_element,as_lattice_element) == l && 
-            is_root(space,ring,field.(as_lattice_element),l) 
+        if is_integral(space, ring, as_lattice_element) && is_root(space,ring,field.(as_lattice_element),l) 
             # this is partially redundant since the crystallographic condition should hold already, as the integralness
             #@info tab * "and it's a root of length $l"
             return Vector{Vector{NfAbsOrdElem}}([ring.(as_lattice_element)])
@@ -260,6 +265,7 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
             #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
             return Vector{Vector{NfAbsOrdElem}}()
         end
+
     elseif j == vd.dim
       
         # If k₁,…,k_{j-1} are chosen and k_j is the last one that needs to be found.
@@ -273,11 +279,11 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
         issquare,square_root = Hecke.issquare((l - sum([stem[i]^2*vd.diagonal_values[i] for i in 1:j-1]))//vd.diagonal_values[j])
         
         if issquare
-             
             return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in unique([square_root,-square_root])]...)            
         else
             return Vector{Vector{NfAbsOrdElem}}()
         end
+
     else
         
         #@info tab * "stem is not complete"
@@ -286,26 +292,42 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[])
         α = vd.diagonal_values[j]
         s = vd.scaling[j]
         S_j = l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
-        upscaled_candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
+        
+        #upscaled_candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
+        
+        conjugates_of_bounded_length(k) = all(≤(field(α*(k//s.elem_in_nf)^2),field(S_j),p) for p in P)
+        crystal(k) = divides(l,2*(k//s.elem_in_nf)*α,ring)
+
+        upscaled_candidates_k_j = bounded_t2_elems(
+            vd.ring, 
+            approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1, 
+            t2_cache, 
+            [conjugates_of_bounded_length,crystal,],
+        )
 
         candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s, upscaled_candidates_k_j)
+            @assert candidates_k_j[1] == 0
         
-        candidates_k_j = vcat(candidates_k_j, .- candidates_k_j)
-        push!(candidates_k_j,field(0))
-       
-        
-        filter!(
+        # bounded length for all conjugates
+        #=filter!(
             k-> all(≤(field(α*k^2),field(S_j),p) for p in P),
             candidates_k_j
-        )
-        
-        filter!(
+        )=#
+       
+
+        # crystallographic condition
+        #=filter!(
             k -> divides(l,2*k*α,ring),
             candidates_k_j,    
-        )
+        )=#
+       
+        # add the opposites (short_t2_elems only give one of ±k), and both the crystallographic condition and the bound on length don't distinguish +k from -k, 
+        # so we check them for either representatives, and add the others afterwrds
+        candidates_k_j = vcat(candidates_k_j, .- candidates_k_j[2:end])
+        # end-1 since the end is zero, which we don't want twice
         
 
-        return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in candidates_k_j]...)
+        return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k),t2_cache=t2_cache) for k in candidates_k_j]...)
     end
     
 end
@@ -347,7 +369,10 @@ function cone_roots(vd,roots_at_distance_zero)
     end
 
     cone_roots = drop_redundant_halfspaces(cone_roots)
-    @info "have $(length(cone_roots)) cone roots" 
+    @info "have $(length(cone_roots)) cone roots"
+    for r in cone_roots
+        @info r
+    end
     return cone_roots
 
 end
@@ -356,12 +381,17 @@ function cone_roots(vd)
     cone_roots(vd,roots_at_distance_zero(vd))
 end
 
-function roots_for_pair(vd,pair,prev_roots)
+function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
+    
+    if t2_cache === nothing
+        t2_cache = BoundedT2ElemsCache(vd.ring) 
+    end
+
     (k,l) = pair
 
     prev_roots_as_diagonals = [vd.diagonal_change*prev_root for prev_root in prev_roots]
     #@info "roots_for_pair($pair,$prev_roots)"
-    roots = extend_root_stem(vd,[k],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals])
+    roots = extend_root_stem(vd,[k],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals],t2_cache=t2_cache)
     
     #@toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles should be good"
     # just in case
@@ -376,16 +406,21 @@ function roots_for_pair(vd,pair,prev_roots)
     
 end
 
-function roots_for_next_pair!(vd,dict,prev_roots)
+function roots_for_next_pair!(vd,dict,prev_roots;t2_cache=nothing)
+
     pair = next_min_pair!(vd,dict)
     @info "next pair is $pair"
 
     # Here we should assert that the roots in prev_roots are actually closer than the next min pair can give us, otherwise we will get inconsistencies
 
-    return roots_for_pair(vd,pair,prev_roots)
+    return roots_for_pair(vd,pair,prev_roots,t2_cache=t2_cache)
 end
 
-function next_n_roots!(vd,prev_roots,dict,das;n=10)
+function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
+
+    if t2_cache===nothing
+        t2_cache = BoundedT2ElemsCache(vd.ring) 
+    end
 
     roots = prev_roots
     #Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
@@ -393,7 +428,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10)
     while n > 0 
 
 
-        new_roots = roots_for_next_pair!(vd,dict,roots)
+        new_roots = roots_for_next_pair!(vd,dict,roots;t2_cache=t2_cache)
         n = n - length(new_roots)
 
         for root in new_roots 
@@ -414,14 +449,15 @@ end
 function next_n_roots!(
     vd::VinbergData,
     prev_roots::Vector;
-    n=10
+    n=10,
+    t2_cache=nothing
 )
 
         Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
         das = build_diagram_and_subs(Coxeter_matrix,vd.dim-1)
         dict = init_least_k_by_root_norm_squared(vd)
     
-        return next_n_roots!(vd,prev_roots,dict,das;n=n)
+        return next_n_roots!(vd,prev_roots,dict,das;n=n,t2_cache=t2_cache)
 end
 
 function next_n_roots!(
@@ -430,7 +466,7 @@ function next_n_roots!(
 )
     roots = cone_roots(vd)
 
-    return next_n_roots!(vd,roots;n=n)
+    return next_n_roots!(vd,roots;n=n,t2_cache=nothing)
 end
 
 function all_in_one(

@@ -1,4 +1,55 @@
 
+mutable struct BoundedT2ElemsCache
+    bounds::Vector{Int}
+    elems::Vector{Vector{NfAbsOrdElem}}
+end
+
+function BoundedT2ElemsCache(ring)
+    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{NfAbsOrdElem}}([[ring(0)]]))
+end
+
+function bounded_t2_elems(ring,bound,cache, filters = [])
+    
+    int_bound = ceil(Int,bound)
+    if int_bound > cache.bounds[end]
+        with_margin = ceil(Int,int_bound*1.2)
+        push!(cache.bounds,with_margin)
+        new_elems = filter(
+            x -> x∉cache.elems[end],
+            short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]) .|> abs,
+        )
+        #sort!(new_elems,rev=true)
+        push!(cache.elems, new_elems)
+    end
+    
+    elems = Vector{NfAbsOrdElem}()
+    i=1
+    while cache.bounds[i] ≤ bound
+        append!(
+            elems,
+            filter(
+                x -> all(f(x) for f in filters),
+                cache.elems[i],
+            )
+        )
+        i = i+1
+        i > length(cache.bounds) && break
+    end
+        
+    if i ≤ length(cache.bounds) && ( cache.bounds[i-1]≠bound ) 
+        # only those have to be checked exactly for boundedness
+        append!(
+            elems,
+            filter(
+                x -> Hecke.t2(x)≤ bound && all(f(x) for f in filters),
+                cache.elems[i]
+            )
+        )
+    end
+    return elems 
+
+end
+
 function diagonalize(ring,A::Matrix)
     # returns T and D with D = T'GT
     # algorithm copied from there https://math.stackexchange.com/questions/1388421/reference-for-linear-algebra-books-that-teach-reverse-hermite-method-for-symmetr

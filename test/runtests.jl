@@ -38,7 +38,7 @@ VA = VinbergsAlgorithmNF
 
     @testset "ℚ(cos(2π/7))" begin
         Qx,x = Hecke.QQ["x"]
-        f = x^3+(1//2)*x^2-(1//2)*x-1
+        f = x^3+(1//2)*x^2-(1//2)*x-1//8
         K,a = Hecke.NumberField(f, "a") 
         b = 2*a^2-1 # a is not equal to cos(2π/7) but b is
         (status,output) = VA.all_in_one(K.([-2b,1,1,1]),10)
