@@ -7,15 +7,15 @@ mutable struct VinbergData
     gram_matrix::AbstractAlgebra.Generic.MatSpaceElem{nf_elem}
     quad_space::Hecke.QuadSpace{AnticNumberField,AbstractAlgebra.Generic.MatSpaceElem{nf_elem}}
 
-    diagonal_basis::Vector{Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}}
-    diagonal_values::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
-    scaling::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+    diagonal_basis::Vector{Vector{nf_elem}}
+    diagonal_values::Vector{nf_elem}
+    scaling::Vector{nf_elem}
     
     diagonal_change::Array{nf_elem,2}
     diagonal_change_inv::Array{nf_elem,2}
 
 
-    possible_root_norms_squared_up_to_squared_units::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+    possible_root_norms_squared_up_to_squared_units::Vector{nf_elem}
 end
 
 
@@ -24,12 +24,14 @@ function VinbergData(number_field,gram_matrix)
     (n,m) = size(gram_matrix)
     @assert n == m "The Gram gram_matrix must be square."
 
+    gram_matrix = number_field.(gram_matrix)
+
     ring_of_integers = maximal_order(number_field)
     quad_space = quadratic_space(number_field, matrix(number_field,gram_matrix))
     #quad_lattice = Hecke.lattice(quad_space)
     
     @assert is_feasible(quad_space) "The quadratic form must be feasible sig (n,1) and all conjugates sig (n+1,0)"
-    @assert all(number_field(c) ∈ ring_of_integers for c in gram_matrix) "The Gram matrix must have coefficients in the ring of integers."
+    @assert all(c ∈ ring_of_integers for c in gram_matrix) "The Gram matrix must have coefficients in the ring of integers."
 
     diagonal_basis_vecs,diagonal_values,scaling = diagonalize_and_get_scaling(gram_matrix,ring_of_integers,number_field)
     negative_vector_index = filter(x-> x[2]<0, collect(enumerate(diagonal_values)))[1][1]
@@ -44,6 +46,14 @@ function VinbergData(number_field,gram_matrix)
     @assert negative_vector_index == 1
     #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
 
+    gram_matrix::Matrix{nf_elem}
+    diagonal_basis_vecs::Vector{Vector{nf_elem}}
+    diagonal_values::Vector{nf_elem}
+    scaling::Vector{nf_elem}
+    diagonal_change = Matrix(matrix(number_field,diagonal_basis_vecs))
+    diagonal_change_inv = Matrix(inv(matrix(number_field,diagonal_basis_vecs)))
+    possible_blah = [x.elem_in_nf for x in possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)]
+    
     return VinbergData(
         n,
         number_field,
@@ -53,9 +63,10 @@ function VinbergData(number_field,gram_matrix)
         diagonal_basis_vecs,
         diagonal_values,
         scaling,
-        Matrix(matrix(number_field,diagonal_basis_vecs)),
-        Matrix(inv(matrix(number_field,diagonal_basis_vecs))),
-        ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
+        diagonal_change,
+        diagonal_change_inv,
+        possible_blah,
+    )
 
 end
 
@@ -99,16 +110,21 @@ end
 
 
 LeastKByRootNormSquared = Dict{
-    NfAbsOrdElem{AnticNumberField,nf_elem},
+    nf_elem,
     Tuple{
-        NfAbsOrdElem{AnticNumberField,nf_elem},
-        Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+        nf_elem,
+        Vector{nf_elem}
     }
 }
 
 
 
-function enumerate_k(vd::VinbergData,l,k_min,k_max)
+function enumerate_k(
+    vd::VinbergData,
+    l::nf_elem,
+    k_min,
+    k_max,
+)::Vector{nf_elem}
     
     #@info "enumerate_k (l=$l, k_min=$k_min, k_max=$k_max)"
 
@@ -120,17 +136,17 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
 
     @assert α < 0 
 
-    M = approx_sum_at_places(field(l*s^2)//field(α),first_place_idx=2)
+    M = approx_sum_at_places(l*s^2//α,first_place_idx=2)
     P = infinite_places(field)
-    k_min_squared_approx = approx(field((k_min*s)^2))
-    k_max_squared_approx = approx(field((k_max*s)^2))
+    k_min_squared_approx = approx((k_min*s)^2)
+    k_max_squared_approx = approx((k_max*s)^2)
 
-    upscaled_candidates = short_t2_elems(ring, k_min_squared_approx-1 , k_max_squared_approx  + M + 1)
+    upscaled_candidates = map(x -> field(x), short_t2_elems(ring, k_min_squared_approx-1 , k_max_squared_approx  + M + 1))
     # short_t2_elems only spits out non-zero stuff, and either k or -k, but not both (for any k)
 
     map!(abs, upscaled_candidates, upscaled_candidates) # Ensures all are positive  
     
-    candidates::Vector{nf_elem} = map(k -> k.elem_in_nf//s, upscaled_candidates) # Correct the scaling  
+    candidates::Vector{nf_elem} = upscaled_candidates .// s # Correct the scaling  
 
     #Only k>0 # this should not be needed
     # We only need k>0 because k=0 corresponds to hyperplane containing the basepoint, treated elsewhere
@@ -180,9 +196,9 @@ end
 
 function init_least_k_by_root_norm_squared(vd::VinbergData)
 
-    return Dict(
+    return LeastKByRootNormSquared(
         [
-            vd.ring(l) => next_min_k_for_l(vd,0,[],l)
+            l => next_min_k_for_l(vd,0,[],l)
             for l in vd.possible_root_norms_squared_up_to_squared_units
         ]
     )
@@ -194,7 +210,7 @@ function next_min_pair(vd,dict)
     min_pair = nothing
 
     # that's the value we want to minimize (related to the distance)
-    val(k,l) = field(k^2)//field(l)
+    val(k,l) = k^2//l
     
 
     for (l,(k,remaining)) in dict 
@@ -257,13 +273,13 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
         #By the case j== vd.dim, the length should already be == l 
         @toggled_assert times(vd,as_lattice_element,as_lattice_element) == l 
 
-        if is_integral(space, ring, as_lattice_element) && is_root(space,ring,field.(as_lattice_element),l) 
+        if is_integral(space, ring, as_lattice_element) && is_root(space,ring,as_lattice_element,l) 
             # this is partially redundant since the crystallographic condition should hold already, as the integralness
             #@info tab * "and it's a root of length $l"
-            return Vector{Vector{NfAbsOrdElem}}([ring.(as_lattice_element)])
+            return Vector{Vector{nf_elem}}([as_lattice_element])
         else
             #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
-            return Vector{Vector{NfAbsOrdElem}}()
+            return Vector{Vector{nf_elem}}()
         end
 
     elseif j == vd.dim
@@ -281,7 +297,7 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
         if issquare
             return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in unique([square_root,-square_root])]...)            
         else
-            return Vector{Vector{NfAbsOrdElem}}()
+            return Vector{Vector{nf_elem}}()
         end
 
     else
@@ -295,17 +311,17 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
         
         #upscaled_candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
         
-        conjugates_of_bounded_length(k) = all(≤(field(α*(k//s.elem_in_nf)^2),field(S_j),p) for p in P)
-        crystal(k) = divides(l,2*(k//s.elem_in_nf)*α,ring)
+        conjugates_of_bounded_length(k) = all(≤(α*(k//s)^2,S_j,p) for p in P)
+        crystal(k) = divides(l,2*(k//s)*α,ring)
 
         upscaled_candidates_k_j = bounded_t2_elems(
             vd.ring, 
-            approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1, 
+            approx_sum_at_places(S_j*s^2//α,first_place_idx=1)+1, 
             t2_cache, 
             [conjugates_of_bounded_length,crystal,],
         )
 
-        candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s, upscaled_candidates_k_j)
+        candidates_k_j::Vector{nf_elem} = upscaled_candidates_k_j .// s
             @assert candidates_k_j[1] == 0
         
         # bounded length for all conjugates

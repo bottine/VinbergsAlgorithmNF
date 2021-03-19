@@ -62,7 +62,7 @@ function is_integral(space,ring,vector)
     field = space.K
     
     for c in vector
-        if !Hecke.in(field(c),ring)
+        if !Hecke.in(c,ring)
             return false
         end
     end
@@ -105,7 +105,7 @@ end
 function is_root(
     space::Hecke.QuadSpace,
     ring::NfAbsOrd,
-    vector::Vector,
+    vector::Vector{nf_elem},
     norm_sq,
 )
 
@@ -139,7 +139,7 @@ end
 function is_root(
     space::Hecke.QuadSpace,
     ring::NfAbsOrd,
-    vector::Vector,
+    vector::Vector{nf_elem},
 )
     norm_sq = norm_squared(space,vector)
     return is_root(space,ring,vector,norm_sq)
@@ -189,7 +189,11 @@ function possible_root_norms_squared_up_to_squared_units(
 
 end
 
-function diagonalize_and_get_scaling(gram,ring,field)
+function diagonalize_and_get_scaling(
+    gram,
+    ring,
+    field
+)::Tuple{Vector{Vector{nf_elem}},Vector{nf_elem},Vector{nf_elem}}
 
     @assert LinearAlgebra.issymmetric(gram)
     n = size(gram)[1]
@@ -202,7 +206,7 @@ function diagonalize_and_get_scaling(gram,ring,field)
     inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
     scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
 
-    return diagonal_basis_vecs, diagonal_values, scaling 
+    return [field.(vec) for vec in diagonal_basis_vecs], field.(diagonal_values), field.(scaling) 
 end
 
 function colinear(
