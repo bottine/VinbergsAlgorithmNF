@@ -57,7 +57,6 @@ end
 
 
 
-
 function is_integral(space,ring,vector)
     field = space.K
     
@@ -187,22 +186,6 @@ function possible_root_norms_squared_up_to_squared_units(
     )
     return [ring(l) for l in unique(all_root_norms)]
 
-end
-
-function diagonalize_and_get_scaling(gram,ring,field)
-
-    @assert LinearAlgebra.issymmetric(gram)
-    n = size(gram)[1]
-
-    diagonal_values,diagonal_basis = diagonalize(ring,gram)
-    diagonal_values = [diagonal_values[i,i] for i in 1:n]
-   
-    diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
-
-    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
-    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
-
-    return diagonal_basis_vecs, diagonal_values, scaling 
 end
 
 function colinear(

@@ -70,14 +70,8 @@ function diagonalize(ring,A::Matrix)
       
         # look at non zero diagonal entries
         non_zero_diag = [k for k in i0:n if M[k,k] ≠ ring(0)]
-        non_zero_diag = sort!(non_zero_diag,by=(k -> abs(M[k,k])))
 
-#        println("====================")
-#        println("i0 = $i0")
-#        display(M)
-#        println("")
-#        println("non_zero_diag = $non_zero_diag")
-#    
+    
         if length(non_zero_diag) == 0
             non_zero_coordinates = [(i,j) for  i in i0:n, j in i0:n if M[i,j]≠0]
             if isempty(non_zero_coordinates)
@@ -117,6 +111,23 @@ function diagonalize(ring,A::Matrix)
 
 end
 
+function diagonalize_and_get_scaling(gram,ring,field)
+
+    @assert LinearAlgebra.issymmetric(gram)
+    n = size(gram)[1]
+
+    diagonal_values,diagonal_basis = diagonalize(ring,gram)
+    @assert LinearAlgebra.isdiag(diagonal_values)
+   
+    diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
+
+    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
+    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
+    # clever scaling does not seem to work for now, TODO
+    #scaling = [abs(lcm_denominators(ring,inverse)) for i in 1:n]
+    return diagonal_basis_vecs, LinearAlgebra.diag(diagonal_values), scaling 
+end
+
 """
     product(d)
 
@@ -130,6 +141,7 @@ function products(d)
 end
 
 
+Base.copy(x::NfAbsOrdElem) = x # Otherwise Nemo throws errors on small matrices
 
 # TODO: make exact
 function is_necessary_halfspace(cone_roots,root) 

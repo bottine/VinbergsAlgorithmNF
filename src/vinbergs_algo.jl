@@ -53,8 +53,8 @@ function VinbergData(number_field,gram_matrix)
         diagonal_basis_vecs,
         diagonal_values,
         scaling,
-        Matrix(matrix(number_field,diagonal_basis_vecs)),
-        Matrix(inv(matrix(number_field,diagonal_basis_vecs))),
+        Matrix(matrix(number_field,diagonal_basis_vecs))',    # notice the transpose here and below. Much frustration took place before I found out I needed those!
+        Matrix(inv(matrix(number_field,diagonal_basis_vecs)))',
         ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
 
 end
@@ -69,12 +69,12 @@ diag(vd::VinbergData) = [vd.gram_matrix[i,i] for i in 1:vd.dim]
 
 function to_diag_rep(vd,vec)
     # vec is in canonical coordinattes
-    vd.diagonal_change*vec
+    vd.diagonal_change_inv*vec
 end
 
 function to_can_rep(vd,vec)
     # vec is in diagonal coordinates
-    vd.diagonal_change_inv*vec
+    vd.diagonal_change*vec
 end
 
 function basepoint(vd::VinbergData)
@@ -89,9 +89,32 @@ times(vd::VinbergData,u,v) = times(vd.quad_space,u,v)
 norm_squared(quad_space::Hecke.QuadSpace,u) = times(quad_space,u,u)
 norm_squared(vd::VinbergData,u) = times(vd.quad_space,u,u)
 
+"""
+    fake_dist_to_point(vd,point,root)
+
+If `point` defines an element of ``ℍ^n`` and `root` a hyperplane, compute the fake distance between the point and the hyperplane, satisfying
+```math
+    \\sinh²(dist(point,hyperplane)) = fake_dist(point,hyperplane)
+```
+"""
+function fake_dist_to_point(vd,point,root)
+    @toggled_assert is_root(vd.quad_space,vd.ring,root) "Need a root"
+    @toggled_assert norm_squared(vd,point) < 0 "Need a point in hyperbolic space."
+
+    fake_dist = -times(vd,root,point)^2//(norm_squared(vd,point)*norm_squared(vd,root))
+
+    return fake_dist 
+end
+
 function fake_dist_to_basepoint(vd,u)
+
     
-    return  times(vd,u,basepoint(vd))^2//norm_squared(vd,u)
+
+    fake_dist =  fake_dist_to_point(vd,basepoint(vd),u)
+    @toggled_assert fake_dist == -(to_diag_rep(vd,u)[1]^2)*vd.diagonal_values[1]//norm_squared(vd,u) 
+
+    return fake_dist
+
 end
 
 
@@ -110,7 +133,7 @@ LeastKByRootNormSquared = Dict{
 
 function enumerate_k(vd::VinbergData,l,k_min,k_max)
     
-    #@info "enumerate_k (l=$l, k_min=$k_min, k_max=$k_max)"
+    @info "enumerate_k (l=$l, k_min=$k_min, k_max=$k_max)"
 
     ring = vd.ring
     field = vd.field
@@ -214,7 +237,7 @@ end
 
 function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=nothing)
  
-    #@info "extend_root_stem $stem $root_length"
+    #@info "extend_root_stem $stem for length =  $root_length"
 
     if t2_cache === nothing
         t2_cache = BoundedT2ElemsCache(vd.ring) 
@@ -292,11 +315,18 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
         α = vd.diagonal_values[j]
         s = vd.scaling[j]
         S_j = l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
-        
+       
+
         #upscaled_candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
         
-        conjugates_of_bounded_length(k) = all(≤(field(α*(k//s.elem_in_nf)^2),field(S_j),p) for p in P)
-        crystal(k) = divides(l,2*(k//s.elem_in_nf)*α,ring)
+        function conjugates_of_bounded_length(k)
+            sat = all(≤(field(α*(k//s.elem_in_nf)^2),field(S_j),p) for p in P)
+            return sat
+        end
+        function crystal(k) 
+            sat = divides(l,2*(k//s.elem_in_nf)*α,ring)
+            return sat
+        end
 
         upscaled_candidates_k_j = bounded_t2_elems(
             vd.ring, 
@@ -305,8 +335,9 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
             [conjugates_of_bounded_length,crystal,],
         )
 
+
         candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s, upscaled_candidates_k_j)
-            @assert candidates_k_j[1] == 0
+        @assert candidates_k_j[1] == 0
         
         # bounded length for all conjugates
         #=filter!(
@@ -409,11 +440,18 @@ end
 function roots_for_next_pair!(vd,dict,prev_roots;t2_cache=nothing)
 
     pair = next_min_pair!(vd,dict)
-    @info "next pair is $pair"
+    k,l = pair
+    fake_dist = -(k^2)*vd.diagonal_values[1].elem_in_nf//(l.elem_in_nf)
+    @info "next pair is $pair (fake_dist is $fake_dist approx $(approx(fake_dist)))"
+
 
     # Here we should assert that the roots in prev_roots are actually closer than the next min pair can give us, otherwise we will get inconsistencies
 
-    return roots_for_pair(vd,pair,prev_roots,t2_cache=t2_cache)
+    roots =  roots_for_pair(vd,pair,prev_roots,t2_cache=t2_cache)
+
+    @toggled_assert all(fake_dist_to_basepoint(vd,r) == fake_dist for r in roots)
+    return roots
+
 end
 
 function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
