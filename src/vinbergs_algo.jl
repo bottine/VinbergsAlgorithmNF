@@ -257,6 +257,7 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
    
      
     if any( bound < 0 && zero_from(root,j) for (root, bound) in bounds)
+        @info "$stem is out of bounds"
         return Vector{Vector{nf_elem}}()
     end
     
@@ -275,7 +276,8 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
     if j == vd.dim + 1
         
 
-        as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
+        as_lattice_element = to_can_rep(vd,stem)
+        #as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
         
         #By the case j== vd.dim, the length should already be == l 
         @toggled_assert times(vd,as_lattice_element,as_lattice_element) == l 
@@ -420,7 +422,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
 
     (k,l) = pair
 
-    prev_roots_as_diagonals = [vd.diagonal_change*prev_root for prev_root in prev_roots]
+    prev_roots_as_diagonals = [to_diag_rep(vd,prev_root) for prev_root in prev_roots]
     #@info "roots_for_pair($pair,$prev_roots)"
     roots = extend_root_stem(vd,[k],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals],t2_cache=t2_cache)
     
