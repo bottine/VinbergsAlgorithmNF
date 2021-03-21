@@ -380,6 +380,7 @@ function extend_root_stem(
        
         
         ###################################### The following only useful for non diagonal forms
+        ###################################### This should probably be moved inside the bounded_t2_elems call for consistency with the other filters 
         all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
         filter!(
             k -> all(
