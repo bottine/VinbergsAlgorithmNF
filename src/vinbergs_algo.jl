@@ -257,7 +257,7 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
    
      
     if any( bound < 0 && zero_from(root,j) for (root, bound) in bounds)
-        @info "$stem is out of bounds"
+        #@info "$stem is out of bounds"
         return Vector{Vector{nf_elem}}()
     end
     

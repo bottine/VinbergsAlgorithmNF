@@ -1,0 +1,4 @@
+[deps]
+Hecke = "3e1990a7-5d81-5526-99ce-9ba3ff248f21"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
