@@ -40,6 +40,13 @@ function VinbergData(number_field,gram_matrix)
         scaling[1],scaling[negative_vector_index] = scaling[negative_vector_index],scaling[1]
     end
 
+    # Sort the basis vectors with increasing number of zeroes in their canonical coordinates:
+    # This should improve stem enumeration on non-diagonal matrices: stems that define non-integral coordinates are spotted earlier.
+    perm_zero = sortperm(diagonal_basis_vecs[2:end],by=(x->count(==(0),x))) .|> (x->x+1)
+    diagonal_basis_vecs[2:end] = diagonal_basis_vecs[perm_zero]
+    diagonal_values[2:end] = diagonal_values[perm_zero]
+    scaling[2:end] = scaling[perm_zero]
+
     negative_vector_index = filter(x-> x[2]<0, collect(enumerate(diagonal_values)))[1][1]
     @assert negative_vector_index == 1
     #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
