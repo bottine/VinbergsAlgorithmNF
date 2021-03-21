@@ -238,6 +238,7 @@ end
 function extend_root_stem(
     vd::VinbergData,
     stem::Vector{nf_elem},
+    can_rep::Vector{nf_elem},
     root_length
     ,bounds=nf_elem[]::Vector{nf_elem};
     t2_cache=nothing
@@ -282,6 +283,7 @@ function extend_root_stem(
     if j == vd.dim + 1
         
         as_lattice_element = to_can_rep(vd,stem)
+        @toggled_assert can_rep == as_lattice_element
         #as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
         
         #By the case j== vd.dim, the length should already be == l 
@@ -314,7 +316,7 @@ function extend_root_stem(
         s = vd.scaling[j]
         
         if issquare && divides(l,2*square_root*α,ring) # crystal
-            return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in unique([square_root,-square_root])]...)            
+            return vcat([extend_root_stem(vd,vcat(stem,[k]),can_rep + k .*vd.diagonal_basis[j],root_length,bounds_updated(k)) for k in unique([square_root,-square_root])]...)            
         else
             return Vector{Vector{NfAbsOrdElem}}()
         end
@@ -368,9 +370,10 @@ function extend_root_stem(
         # so we check them for either representatives, and add the others afterwrds
         candidates_k_j = vcat(candidates_k_j, .- candidates_k_j[2:end])
         # end-1 since the end is zero, which we don't want twice
+       
         
 
-        return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k),t2_cache=t2_cache) for k in candidates_k_j]...)
+        return vcat([extend_root_stem(vd,vcat(stem,[k]),can_rep + k .* vd.diagonal_basis[j],root_length,bounds_updated(k),t2_cache=t2_cache) for k in candidates_k_j]...)
     end
     
 end
@@ -379,7 +382,7 @@ end
 function roots_at_distance_zero(vd::VinbergData)
     stems = [(nf_elem[vd.field(0)],l) for l in vd.possible_root_norms_squared_up_to_squared_units] 
     
-    return vcat([extend_root_stem(vd,stem...) for stem in stems]...)
+    return vcat([extend_root_stem(vd,stem,nf_elem[vd.field(0) for i in 1:vd.dim],l) for (stem,l) in stems]...)
 end
 
 function cone_roots(vd,roots_at_distance_zero)
@@ -434,7 +437,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
 
     prev_roots_as_diagonals = [to_diag_rep(vd,prev_root) for prev_root in prev_roots]
     #@info "roots_for_pair($pair,$prev_roots)"
-    roots = extend_root_stem(vd,[k],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals],t2_cache=t2_cache)
+    roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals],t2_cache=t2_cache)
     
     #@toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles should be good"
     # just in case
