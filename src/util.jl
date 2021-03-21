@@ -140,6 +140,7 @@ function products(d)
     return [prod([k^p for (k,p) in zip(ks,pp)]) for pp in partial_products]
 end
 
+⇒(x::Bool,y::Bool) = !x || y
 
 Base.copy(x::NfAbsOrdElem) = x # Otherwise Nemo throws errors on small matrices
 

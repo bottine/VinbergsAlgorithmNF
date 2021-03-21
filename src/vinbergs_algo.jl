@@ -372,6 +372,16 @@ function extend_root_stem(
         # end-1 since the end is zero, which we don't want twice
        
         
+        ###################################### The following only useful for non diagonal forms
+        all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
+        filter!(
+            k -> all(
+                     all_zero_on_coord_after(vd,j,idx) ⇒ (can_rep[idx] + k*(vd.diagonal_basis[j][idx]) ∈ ring) 
+                for idx in 1:vd.dim
+            ),
+            candidates_k_j
+        ) 
+        ######################################
 
         return vcat([extend_root_stem(vd,vcat(stem,[k]),can_rep + k .* vd.diagonal_basis[j],root_length,bounds_updated(k),t2_cache=t2_cache) for k in candidates_k_j]...)
     end
@@ -434,7 +444,15 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     end
 
     (k,l) = pair
-
+   
+    ######################## The following only useful for non-diags
+    all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
+    if !all(all_zero_on_coord_after(vd,1,idx) ⇒ (k*(vd.diagonal_basis[1][idx]) ∈ vd.ring) for idx in 1:vd.dim)
+        @info "$k would define non-integral coordinates ⇒ dropping it"
+        return [] 
+    end
+    ######################
+    
     prev_roots_as_diagonals = [to_diag_rep(vd,prev_root) for prev_root in prev_roots]
     #@info "roots_for_pair($pair,$prev_roots)"
     roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals],t2_cache=t2_cache)
