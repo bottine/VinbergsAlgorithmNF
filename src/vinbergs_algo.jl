@@ -235,7 +235,13 @@ function next_min_pair!(vd,dict)
     return min_pair
 end
 
-function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=nothing)
+function extend_root_stem(
+    vd::VinbergData,
+    stem::Vector{nf_elem},
+    root_length
+    ,bounds=nf_elem[]::Vector{nf_elem};
+    t2_cache=nothing
+)
  
     #@info "extend_root_stem $stem for length =  $root_length"
 
@@ -371,7 +377,7 @@ end
 
 
 function roots_at_distance_zero(vd::VinbergData)
-    stems = [([0],l) for l in vd.possible_root_norms_squared_up_to_squared_units] 
+    stems = [(nf_elem[vd.field(0)],l) for l in vd.possible_root_norms_squared_up_to_squared_units] 
     
     return vcat([extend_root_stem(vd,stem...) for stem in stems]...)
 end
