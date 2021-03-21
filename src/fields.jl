@@ -69,7 +69,7 @@ end
 lcm_denominators(ring,iter) = elem_lcm(ring,[Hecke.denominator(x,ring) for x in iter]) 
 
 divides(a::NfAbsOrdElem{AnticNumberField,nf_elem},b::NfAbsOrdElem{AnticNumberField,nf_elem},ring) = b.elem_in_nf//a.elem_in_nf ∈ ring
-divides(a,b,ring) = divides(ring(a),ring(b),ring)
+divides(a,b,ring) = b//a∈ring
 
 function t2_exact(x::S) where S <: NumFieldElem
     @assert istotally_real(parent(x))

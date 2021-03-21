@@ -275,7 +275,6 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
 
     if j == vd.dim + 1
         
-
         as_lattice_element = to_can_rep(vd,stem)
         #as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
         
@@ -285,8 +284,10 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
         if is_integral(space, ring, as_lattice_element) && is_root(space,ring,field.(as_lattice_element),l) 
             # this is partially redundant since the crystallographic condition should hold already, as the integralness
             #@info tab * "and it's a root of length $l"
+            #@info "is root"
             return Vector{Vector{NfAbsOrdElem}}([ring.(as_lattice_element)])
         else
+            #@info "isnoroot"
             #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
             return Vector{Vector{NfAbsOrdElem}}()
         end
@@ -303,7 +304,10 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
 
         issquare,square_root = Hecke.issquare((l - sum([stem[i]^2*vd.diagonal_values[i] for i in 1:j-1]))//vd.diagonal_values[j])
         
-        if issquare
+        α = vd.diagonal_values[j]
+        s = vd.scaling[j]
+        
+        if issquare && divides(l,2*square_root*α,ring) # crystal
             return vcat([extend_root_stem(vd,vcat(stem,[k]),root_length,bounds_updated(k)) for k in unique([square_root,-square_root])]...)            
         else
             return Vector{Vector{NfAbsOrdElem}}()
@@ -311,7 +315,7 @@ function extend_root_stem(vd::VinbergData,stem,root_length,bounds=[];t2_cache=no
 
     else
         
-        #@info tab * "stem is not complete"
+        #@info "$stem is not complete"
         
 
         α = vd.diagonal_values[j]
