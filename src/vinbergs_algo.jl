@@ -420,7 +420,8 @@ function extend_root_stem(
         
         #@info "$stem is not complete"
         
-        interval_k_j = interval_for_k_j(constraints,j)
+        # does not work yet
+        #interval_k_j = interval_for_k_j(constraints,j)
 
         α = vd.diagonal_values[j]
         s = vd.scaling[j]
