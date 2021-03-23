@@ -51,7 +51,7 @@ function VinbergData(number_field,gram_matrix)
     @assert negative_vector_index == 1
     #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
 
-    return VinbergData(
+    vd =  VinbergData(
         n,
         number_field,
         ring_of_integers,
@@ -63,6 +63,9 @@ function VinbergData(number_field,gram_matrix)
         Matrix(matrix(number_field,diagonal_basis_vecs))',    # notice the transpose here and below. Much frustration took place before I found out I needed those!
         Matrix(inv(matrix(number_field,diagonal_basis_vecs)))',
         ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
+
+    @info "Basepoint is $(basepoint(vd))"
+    return vd
 
 end
 
@@ -358,7 +361,6 @@ function extend_root_stem(
    
      
     if clearly_inconsistent(constraints,j,vd.dim) 
-        #@info "$stem is out of bounds"
         return Vector{Vector{nf_elem}}()
     end
     
@@ -383,7 +385,6 @@ function extend_root_stem(
         if is_integral(space, ring, stem_can_rep) && is_root(space,ring,field.(stem_can_rep),l) 
             # this is partially redundant since the integralness should already hold?
             #@info tab * "and it's a root of length $l"
-            #@info "is root"
             return Vector{Vector{NfAbsOrdElem}}([ring.(stem_can_rep)])
         else
             #@info "isnoroot"
@@ -422,6 +423,7 @@ function extend_root_stem(
         
         # does not work yet
         #interval_k_j = interval_for_k_j(constraints,j)
+        #@info "interval $interval_k_j"
 
         α = vd.diagonal_values[j]
         s = vd.scaling[j]
@@ -461,6 +463,13 @@ function extend_root_stem(
         ######################################
         
         candidates_k_j = vcat(filter(k -> #=in_interval(k,interval_k_j) && =# integral(k),candidates_k_j), filter(k -> #=in_interval(k,interval_k_j) && =# integral(k), .- candidates_k_j[2:end])) # [2:end] since index 1 contains zero, which we don't want twice
+        #=for k in candidates_k_j
+            if !in_interval(k,interval_k_j)
+                @info "$k out of bounds ? $interval_k_j"
+                @info "stem: $stem"
+                @info "constraints $constraints"
+            end
+        end=#
 
         return vcat([extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* vd.diagonal_basis[j],root_length,update_constraints(constraints,j,k*vd.diagonal_values[j]),t2_cache) for k in candidates_k_j]...)
     end
