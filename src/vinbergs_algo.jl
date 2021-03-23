@@ -301,6 +301,12 @@ AffineConstraints = Tuple{
 }     
 no_constraints = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
 
+function inconsistent(ac::AffineConstraints,idx)
+    (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
+    return any( bound < 0 && last_non_zero < idx for (bound,last_non_zero) in zip(c_values,c_last_non_zero_coordinates))   
+end
+
+
 function extend_root_stem(
     vd::VinbergData,
     stem::Vector{nf_elem},
@@ -460,9 +466,10 @@ end
 function roots_at_distance_zero(vd::VinbergData)
 
     t2_cache = BoundedT2ElemsCache(vd.ring) 
-    stems = [(nf_elem[vd.field(0)],l) for l in vd.possible_root_norms_squared_up_to_squared_units] 
+    zero_stem = nf_elem[vd.field(0)]
+    zero_stem_can_rep = nf_elem[vd.field(0) for i in 1:vd.dim]
     
-    return vcat([extend_root_stem(vd,stem,nf_elem[vd.field(0) for i in 1:vd.dim],l,no_constraints,t2_cache) for (stem,l) in stems]...)
+    return vcat([extend_root_stem(vd,zero_stem,zero_stem_can_rep,l,no_constraints,t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
 end
 
 function cone_roots(vd,roots_at_distance_zero)
