@@ -252,9 +252,14 @@ function BoundedT2ElemsCache(ring)
     return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{NfAbsOrdElem}}([[ring(0)]]))
 end
 
-function bounded_t2_elems(ring,bound,cache, filters = [])
+function bounded_t2_elems(
+    ring,
+    t2_bound,
+    cache, 
+    filters = []
+)
     
-    int_bound = ceil(Int,bound)
+    int_bound = ceil(Int,t2_bound)
     if int_bound > cache.bounds[end]
         with_margin = ceil(Int,int_bound*1.2)
         push!(cache.bounds,with_margin)
@@ -268,7 +273,7 @@ function bounded_t2_elems(ring,bound,cache, filters = [])
     
     elems = Vector{NfAbsOrdElem}()
     i=1
-    while cache.bounds[i] ≤ bound
+    while cache.bounds[i] ≤ t2_bound
         append!(
             elems,
             filter(
@@ -280,12 +285,12 @@ function bounded_t2_elems(ring,bound,cache, filters = [])
         i > length(cache.bounds) && break
     end
         
-    if i ≤ length(cache.bounds) && ( cache.bounds[i-1]≠bound ) 
+    if i ≤ length(cache.bounds) && ( cache.bounds[i-1]≠t2_bound ) 
         # only those have to be checked exactly for boundedness
         append!(
             elems,
             filter(
-                x -> Hecke.t2(x)≤ bound && all(f(x) for f in filters),
+                x -> Hecke.t2(x)≤ t2_bound && all(f(x) for f in filters),
                 cache.elems[i]
             )
         )
@@ -313,13 +318,21 @@ function update_constraints(ac::AffineConstraints,idx::Int,val_at_idx::nf_elem)
 
 end
 
-function constraint_on_k_j(ac::AffineConstraints,j::Int)
+function interval_for_k_j(ac::AffineConstraints,j::Int)::Tuple{Union{Nothing,nf_elem},Union{Nothing,nf_elem}}
     applicable = [(vec[j],val) for (vec,val,last) in zip(ac...) if last == j]
     pos = [v//c for (c,v) in applicable if c > 0]
-    neg = [-v//c for (c,v) in applicable if c < 0]
-    return maximum(neg),minimum(pos)
-    # must have k_j ≤ c for all c in applicable
+    neg = [v//c for (c,v) in applicable if c < 0]
+    return (isempty(neg) ? nothing : maximum(neg), isempty(pos) ? nothing : minimum(pos))
 end
+
+function in_interval(
+    k,
+    interval::Tuple{Union{Nothing,nf_elem},Union{Nothing,nf_elem}}
+)
+    (lb,ub) = interval
+    return (lb === nothing || k ≥ lb) && (ub === nothing || k ≤ ub)
+end
+
 
 function extend_root_stem(
     vd::VinbergData,
@@ -364,7 +377,8 @@ function extend_root_stem(
     if j == vd.dim + 1
         
         @toggled_assert stem_can_rep == to_can_rep(vd,stem) "Sanity check. `stem_can_rep` must always be equal to `to_can_rep(vd,stem)`!"
-        @toggled_assert times(vd,stem_can_rep,stem_can_rep) == l "Sanity check. If we are here, by the previous case (j==vd.dim) necessarily we have the right length." 
+        @toggled_assert times(vd,stem_can_rep,stem_can_rep) == l "Sanity check. If we are here, by the previous case (j==vd.dim) necessarily we have the right length."
+        @toggled_assert all(bound ≥ 0 for bound in c_values) "All affine constraints given by previous roots must be satisfied."
 
         if is_integral(space, ring, stem_can_rep) && is_root(space,ring,field.(stem_can_rep),l) 
             # this is partially redundant since the integralness should already hold?
@@ -406,10 +420,11 @@ function extend_root_stem(
         
         #@info "$stem is not complete"
         
+        interval_k_j = interval_for_k_j(constraints,j)
 
         α = vd.diagonal_values[j]
         s = vd.scaling[j]
-        S_j = l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
+        S_j = l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) # S_j should be computed incrementally since S_{j+1} = S_j - stem[j+1]^2*diag_value[j+1] 
        
 
         #upscaled_candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
@@ -432,38 +447,19 @@ function extend_root_stem(
 
 
         candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s, upscaled_candidates_k_j)
-        @assert candidates_k_j[1] == 0
+        @assert isempty(candidates_k_j) || candidates_k_j[1] == 0
         
-        # bounded length for all conjugates
-        #=filter!(
-            k-> all(≤(field(α*k^2),field(S_j),p) for p in P),
-            candidates_k_j
-        )=#
-       
-
-        # crystallographic condition
-        #=filter!(
-            k -> divides(l,2*k*α,ring),
-            candidates_k_j,    
-        )=#
-       
-        # add the opposites (short_t2_elems only give one of ±k), and both the crystallographic condition and the bound on length don't distinguish +k from -k, 
-        # so we check them for either representatives, and add the others afterwrds
-        candidates_k_j = vcat(candidates_k_j, .- candidates_k_j[2:end])
-        # end-1 since the end is zero, which we don't want twice
-       
         
         ###################################### The following only useful for non diagonal forms
         ###################################### This should probably be moved inside the bounded_t2_elems call for consistency with the other filters 
-        all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
-        filter!(
-            k -> all(
-                     all_zero_on_coord_after(vd,j,idx) ⇒ (stem_can_rep[idx] + k*(vd.diagonal_basis[j][idx]) ∈ ring) 
-                for idx in 1:vd.dim
-            ),
-            candidates_k_j
-        ) 
+        all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim) # this can be precomputed and stored in vd
+        integral(k) = all(
+            all_zero_on_coord_after(vd,j,idx) ⇒ (stem_can_rep[idx] + k*(vd.diagonal_basis[j][idx]) ∈ ring) 
+            for idx in 1:vd.dim
+        )
         ######################################
+        
+        candidates_k_j = vcat(filter(k -> #=in_interval(k,interval_k_j) && =# integral(k),candidates_k_j), filter(k -> #=in_interval(k,interval_k_j) && =# integral(k), .- candidates_k_j[2:end])) # [2:end] since index 1 contains zero, which we don't want twice
 
         return vcat([extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* vd.diagonal_basis[j],root_length,update_constraints(constraints,j,k*vd.diagonal_values[j]),t2_cache) for k in candidates_k_j]...)
     end
@@ -547,13 +543,13 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     #@info "roots_for_pair($pair,$prev_roots)"
     roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,prev_roots_constraints,t2_cache)
     
-    #@toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles should be good"
+    @toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles with previous roots should be acute."
     # just in case
     filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
     @toggled_assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
     @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
-    @toggled_assert all(r₁ == r₂ || times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots) "Two roots at same distance to basepoint, and both compatible with previous ones, should be compatible with each other: why? ($roots)"
+    @toggled_assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) "Two roots at same distance to basepoint, and both compatible with previous ones, should be compatible with each other: why? ($roots)"
    
     
     return roots
