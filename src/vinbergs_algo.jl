@@ -301,16 +301,30 @@ AffineConstraints = Tuple{
 }     
 no_constraints = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
 
-function inconsistent(ac::AffineConstraints,idx)
-    (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
+function clearly_inconsistent(ac::AffineConstraints,idx,dim)
+    (c_vectors,c_values,c_last_non_zero_coordinates) = ac 
     return any( bound < 0 && last_non_zero < idx for (bound,last_non_zero) in zip(c_values,c_last_non_zero_coordinates))   
 end
 
+function update_constraints(ac::AffineConstraints,idx::Int,val_at_idx::nf_elem)
+    (c_vectors,c_values,c_last_non_zero_coordinates) = ac
+    
+    return (c_vectors,[b - val_at_idx*r[idx] for (r,b) in zip(c_vectors,c_values)],c_last_non_zero_coordinates)
+
+end
+
+function constraint_on_k_j(ac::AffineConstraints,j::Int)
+    applicable = [(vec[j],val) for (vec,val,last) in zip(ac...) if last == j]
+    pos = [v//c for (c,v) in applicable if c > 0]
+    neg = [-v//c for (c,v) in applicable if c < 0]
+    return maximum(neg),minimum(pos)
+    # must have k_j ≤ c for all c in applicable
+end
 
 function extend_root_stem(
     vd::VinbergData,
     stem::Vector{nf_elem},
-    can_rep::Vector{nf_elem},
+    stem_can_rep::Vector{nf_elem},
     root_length,
     constraints::AffineConstraints,
     t2_cache::BoundedT2ElemsCache
@@ -324,15 +338,13 @@ function extend_root_stem(
 
     (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
     
-    # helper function: update the bounds given by letting the next coeff be k
-    constraints_updated(k) = (c_vectors,[b - vd.diagonal_values[j]*k*r[j] for (r,b) in zip(c_vectors,c_values)],c_last_non_zero_coordinates)
  
     #@info "stem is $stem"
     #@info "bounds are:"
     #@info "$([(r[j:end],b) for (r,b) in bounds])"
    
      
-    if any( bound < 0 && last_non_zero < j for (bound,last_non_zero) in zip(c_values,c_last_non_zero_coordinates))
+    if clearly_inconsistent(constraints,j,vd.dim) 
         #@info "$stem is out of bounds"
         return Vector{Vector{nf_elem}}()
     end
@@ -351,18 +363,14 @@ function extend_root_stem(
 
     if j == vd.dim + 1
         
-        as_lattice_element = to_can_rep(vd,stem)
-        @toggled_assert can_rep == as_lattice_element
-        #as_lattice_element = sum([stem[i] .* vd.diagonal_basis[i] for i in 1:vd.dim])
-        
-        #By the case j== vd.dim, the length should already be == l 
-        @toggled_assert times(vd,as_lattice_element,as_lattice_element) == l 
+        @toggled_assert stem_can_rep == to_can_rep(vd,stem) "Sanity check. `stem_can_rep` must always be equal to `to_can_rep(vd,stem)`!"
+        @toggled_assert times(vd,stem_can_rep,stem_can_rep) == l "Sanity check. If we are here, by the previous case (j==vd.dim) necessarily we have the right length." 
 
-        if is_integral(space, ring, as_lattice_element) && is_root(space,ring,field.(as_lattice_element),l) 
-            # this is partially redundant since the crystallographic condition should hold already, as the integralness
+        if is_integral(space, ring, stem_can_rep) && is_root(space,ring,field.(stem_can_rep),l) 
+            # this is partially redundant since the integralness should already hold?
             #@info tab * "and it's a root of length $l"
             #@info "is root"
-            return Vector{Vector{NfAbsOrdElem}}([ring.(as_lattice_element)])
+            return Vector{Vector{NfAbsOrdElem}}([ring.(stem_can_rep)])
         else
             #@info "isnoroot"
             #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
@@ -386,7 +394,7 @@ function extend_root_stem(
         if issquare && divides(l,2*square_root*α,ring) # crystal
             return vcat(
                 [   
-                    extend_root_stem(vd,vcat(stem,[k]),can_rep + k .*vd.diagonal_basis[j],root_length,constraints_updated(k),t2_cache) 
+                 extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .*vd.diagonal_basis[j],root_length,update_constraints(constraints,j,k*vd.diagonal_values[j]),t2_cache) 
                     for k in unique([square_root,-square_root])
                 ]...
             )            
@@ -450,14 +458,14 @@ function extend_root_stem(
         all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
         filter!(
             k -> all(
-                     all_zero_on_coord_after(vd,j,idx) ⇒ (can_rep[idx] + k*(vd.diagonal_basis[j][idx]) ∈ ring) 
+                     all_zero_on_coord_after(vd,j,idx) ⇒ (stem_can_rep[idx] + k*(vd.diagonal_basis[j][idx]) ∈ ring) 
                 for idx in 1:vd.dim
             ),
             candidates_k_j
         ) 
         ######################################
 
-        return vcat([extend_root_stem(vd,vcat(stem,[k]),can_rep + k .* vd.diagonal_basis[j],root_length,constraints_updated(k),t2_cache) for k in candidates_k_j]...)
+        return vcat([extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* vd.diagonal_basis[j],root_length,update_constraints(constraints,j,k*vd.diagonal_values[j]),t2_cache) for k in candidates_k_j]...)
     end
     
 end
