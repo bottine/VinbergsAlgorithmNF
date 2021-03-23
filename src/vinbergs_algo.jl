@@ -242,35 +242,91 @@ function next_min_pair!(vd,dict)
     return min_pair
 end
 
+
+mutable struct BoundedT2ElemsCache
+    bounds::Vector{Int}
+    elems::Vector{Vector{NfAbsOrdElem}}
+end
+
+function BoundedT2ElemsCache(ring)
+    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{NfAbsOrdElem}}([[ring(0)]]))
+end
+
+function bounded_t2_elems(ring,bound,cache, filters = [])
+    
+    int_bound = ceil(Int,bound)
+    if int_bound > cache.bounds[end]
+        with_margin = ceil(Int,int_bound*1.2)
+        push!(cache.bounds,with_margin)
+        new_elems = filter(
+            x -> x∉cache.elems[end],
+            short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]) .|> abs,
+        )
+        #sort!(new_elems,rev=true)
+        push!(cache.elems, new_elems)
+    end
+    
+    elems = Vector{NfAbsOrdElem}()
+    i=1
+    while cache.bounds[i] ≤ bound
+        append!(
+            elems,
+            filter(
+                x -> all(f(x) for f in filters),
+                cache.elems[i],
+            )
+        )
+        i = i+1
+        i > length(cache.bounds) && break
+    end
+        
+    if i ≤ length(cache.bounds) && ( cache.bounds[i-1]≠bound ) 
+        # only those have to be checked exactly for boundedness
+        append!(
+            elems,
+            filter(
+                x -> Hecke.t2(x)≤ bound && all(f(x) for f in filters),
+                cache.elems[i]
+            )
+        )
+    end
+    return elems 
+
+end
+
+AffineConstraints = Tuple{
+    Vector{Vector{nf_elem}}, # Previous roots
+    Vector{nf_elem},         # ≤ bound
+    Vector{Int},           # last non non-zero coordinate
+}     
+no_constraints = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
+
 function extend_root_stem(
     vd::VinbergData,
     stem::Vector{nf_elem},
     can_rep::Vector{nf_elem},
-    root_length
-    ,bounds=nf_elem[]::Vector{nf_elem};
-    t2_cache=nothing
+    root_length,
+    constraints::AffineConstraints,
+    t2_cache::BoundedT2ElemsCache
 )
  
     #@info "extend_root_stem $stem for length =  $root_length"
 
-    if t2_cache === nothing
-        t2_cache = BoundedT2ElemsCache(vd.ring) 
-    end
-
     # helper function; checks that the vector v is all zeros starting from index i
-    zero_from(v,i) = all(==(0),v[i:end])
     
     j = length(stem) + 1
+
+    (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
     
     # helper function: update the bounds given by letting the next coeff be k
-    bounds_updated(k) = [(r,b - vd.diagonal_values[j]*k*r[j]) for (r,b) in bounds]
+    constraints_updated(k) = (c_vectors,[b - vd.diagonal_values[j]*k*r[j] for (r,b) in zip(c_vectors,c_values)],c_last_non_zero_coordinates)
  
     #@info "stem is $stem"
     #@info "bounds are:"
     #@info "$([(r[j:end],b) for (r,b) in bounds])"
    
      
-    if any( bound < 0 && zero_from(root,j) for (root, bound) in bounds)
+    if any( bound < 0 && last_non_zero < j for (bound,last_non_zero) in zip(c_values,c_last_non_zero_coordinates))
         #@info "$stem is out of bounds"
         return Vector{Vector{nf_elem}}()
     end
@@ -316,14 +372,18 @@ function extend_root_stem(
         #   ∑_{i=1}^{j-1} k_i^2α_i + k_j^2α_j == normed²(r) == l 
         #
         # Which means k_j^2 = (l - ∑_{i=1}^{j-1}k_i^2α_i)/α_j.
-
         issquare,square_root = Hecke.issquare((l - sum([stem[i]^2*vd.diagonal_values[i] for i in 1:j-1]))//vd.diagonal_values[j])
         
         α = vd.diagonal_values[j]
         s = vd.scaling[j]
         
         if issquare && divides(l,2*square_root*α,ring) # crystal
-            return vcat([extend_root_stem(vd,vcat(stem,[k]),can_rep + k .*vd.diagonal_basis[j],root_length,bounds_updated(k)) for k in unique([square_root,-square_root])]...)            
+            return vcat(
+                [   
+                    extend_root_stem(vd,vcat(stem,[k]),can_rep + k .*vd.diagonal_basis[j],root_length,constraints_updated(k),t2_cache) 
+                    for k in unique([square_root,-square_root])
+                ]...
+            )            
         else
             return Vector{Vector{NfAbsOrdElem}}()
         end
@@ -391,16 +451,18 @@ function extend_root_stem(
         ) 
         ######################################
 
-        return vcat([extend_root_stem(vd,vcat(stem,[k]),can_rep + k .* vd.diagonal_basis[j],root_length,bounds_updated(k),t2_cache=t2_cache) for k in candidates_k_j]...)
+        return vcat([extend_root_stem(vd,vcat(stem,[k]),can_rep + k .* vd.diagonal_basis[j],root_length,constraints_updated(k),t2_cache) for k in candidates_k_j]...)
     end
     
 end
 
 
 function roots_at_distance_zero(vd::VinbergData)
+
+    t2_cache = BoundedT2ElemsCache(vd.ring) 
     stems = [(nf_elem[vd.field(0)],l) for l in vd.possible_root_norms_squared_up_to_squared_units] 
     
-    return vcat([extend_root_stem(vd,stem,nf_elem[vd.field(0) for i in 1:vd.dim],l) for (stem,l) in stems]...)
+    return vcat([extend_root_stem(vd,stem,nf_elem[vd.field(0) for i in 1:vd.dim],l,no_constraints,t2_cache) for (stem,l) in stems]...)
 end
 
 function cone_roots(vd,roots_at_distance_zero)
@@ -461,9 +523,14 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     end
     ######################
     
-    prev_roots_as_diagonals = [to_diag_rep(vd,prev_root) for prev_root in prev_roots]
+    # Construct the constraints defined by the previous roots
+    prev_roots_diag = [to_diag_rep(vd,prev_root) for prev_root in prev_roots]
+    prev_roots_diag_bound = [-k*vd.diagonal_values[1]*prev_root[1] for prev_root in prev_roots_diag]
+    prev_roots_diag_last_non_zero_coordinate = [findlast(≠(0),prev_root) for prev_root in prev_roots_diag]
+    prev_roots_constraints = (prev_roots_diag,prev_roots_diag_bound,prev_roots_diag_last_non_zero_coordinate)
+
     #@info "roots_for_pair($pair,$prev_roots)"
-    roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,[(prev_root,-k*vd.diagonal_values[1]*prev_root[1]) for prev_root in prev_roots_as_diagonals],t2_cache=t2_cache)
+    roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,prev_roots_constraints,t2_cache)
     
     #@toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles should be good"
     # just in case
