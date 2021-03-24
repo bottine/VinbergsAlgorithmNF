@@ -103,8 +103,8 @@ function non_neg_short_t2_elems(O::NfAbsOrd, lb, ub)
     return candidates
 end
 
-approx(x) = Float64(conjugates_real(x)[1])
-approx(x::NfAbsOrdElem{AnticNumberField,nf_elem}) = Float64(conjugates_real(x.elem_in_nf)[1])
+approx(x, abs_tol::Int = 32) = BigFloat(conjugates_real(x,abs_tol)[1])
+approx(x::NfAbsOrdElem{AnticNumberField,nf_elem}, abs_tol::Int = 32) = BigFloat(conjugates_real(x.elem_in_nf,abs_tol)[1])
 
 approx_sum_at_places(val;first_place_idx) = sum(convert.(Float64,conjugates_real(val,32)[first_place_idx:end]))
 

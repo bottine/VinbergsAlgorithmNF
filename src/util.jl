@@ -100,8 +100,8 @@ function is_necessary_halfspace(cone_roots,root)
    
 
 
-    float_cone_roots = Vector{Vector{Float64}}([approx.(cone_root) for cone_root in cone_roots])    
-    float_root = Vector{Float64}(approx.(root))
+    float_cone_roots = Vector{Vector{BigFloat}}([[approx(r,1024) for r in cone_root] for cone_root in cone_roots])    
+    float_root = Vector{BigFloat}([approx(r,1024) for r in root])
     
     n = length(root) 
 
@@ -110,16 +110,16 @@ function is_necessary_halfspace(cone_roots,root)
 
     #x = Variable(n, IntVar)
     x = Variable(n)
-    p = satisfy()       # satisfiability question 
-    for cone_root in float_cone_roots
-        p.constraints += x' * cone_root ≤ 0 # hyperplanes defining the cone
+    p = maximize(big(0); numeric_type=BigFloat)       # satisfiability question 
+    for float_cone_root in float_cone_roots
+        p.constraints += x' * float_cone_root ≤ big(0) # hyperplanes defining the cone
     end
-    p.constraints += x' * float_root ≥ 1 # other side of the half space defined by root
+    p.constraints += x' * float_root ≥ big(1) # other side of the half space defined by root
     # it should only be strictly bigger than zero, but Convex.jl does not do "strictly", so we change it to ≥ 1 (and since we have a cone, it should be the same result)
 
     
     #Convex.solve!(p,Cbc.Optimizer(verbose=0,loglevel=0), verbose=false, warmstart=false)
-    Convex.solve!(p,Tulip.Optimizer(), verbose=false)
+    Convex.solve!(p,Tulip.Optimizer{BigFloat}(), verbose=false)
    
 
     if p.status == MathOptInterface.INFEASIBLE 
@@ -128,6 +128,7 @@ function is_necessary_halfspace(cone_roots,root)
         #println(p.optval)
         return true
     else
+        @error "LP program couldn't decide feasibility."
         println("can't tell! ($(p.status))")
         println("             $(p))")
     end
