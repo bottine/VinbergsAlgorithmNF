@@ -64,6 +64,7 @@ function VinbergData(number_field,gram_matrix)
         Matrix(inv(matrix(number_field,diagonal_basis_vecs)))',
         ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
 
+    @info "Matrix is $gram_matrix"
     @info "Basepoint is $(basepoint(vd))"
     return vd
 
@@ -131,7 +132,7 @@ end
 
 
 
-LeastKByRootNormSquared = Dict{
+const LeastKByRootNormSquared = Dict{
     NfAbsOrdElem{AnticNumberField,nf_elem},
     Tuple{
         NfAbsOrdElem{AnticNumberField,nf_elem},
@@ -302,12 +303,12 @@ function bounded_t2_elems(
 
 end
 
-AffineConstraints = Tuple{
+const AffineConstraints = Tuple{
     Vector{Vector{nf_elem}}, # Previous roots
     Vector{nf_elem},         # ≤ bound
     Vector{Int},           # last non non-zero coordinate
 }     
-no_constraints = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
+const no_constraints = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
 
 function clearly_inconsistent(ac::AffineConstraints,idx,dim)
     (c_vectors,c_values,c_last_non_zero_coordinates) = ac 
@@ -499,13 +500,17 @@ function cone_roots(vd,roots_at_distance_zero)
 
     @warn "Cone roots computation are approximative ⇒ double check the results by hand."
     roots_at_distance_zero = [vd.field.(root) for root in roots_at_distance_zero]
+    @info "starting with $(length(roots_at_distance_zero)) roots at distance zero"
+    
+    len = length(roots_at_distance_zero)
 
     # We put first the roots with integer coordinates to maximize the chance of having them in the cone roots
     # It's not necessary but easier to analyze the output and compare with rgug then
-    integer_roots = filter!(r -> all(isinteger,vd.field.(r)), roots_at_distance_zero) 
+    integer_roots = filter(r -> all(isinteger,vd.field.(r)), roots_at_distance_zero)
+    non_integer_roots = filter(r -> !all(isinteger,vd.field.(r)), roots_at_distance_zero)
     sort!(integer_roots)
-    prepend!(integer_roots,roots_at_distance_zero)
-
+    roots_at_distance_zero = vcat(integer_roots,non_integer_roots)
+    @assert len == length(roots_at_distance_zero) "did we drop a root while reorgarizing them?"
     
     cone_roots = Vector{Vector{nf_elem}}()
     @debug "starting with $(length(roots_at_distance_zero)) at dist zero"
@@ -515,7 +520,7 @@ function cone_roots(vd,roots_at_distance_zero)
         @debug "looking at $r"
         if  all((-1)*r ≠ cr for cr in cone_roots)
             @debug "so far so good"
-            if is_necessary_halfspace(cone_roots,-vd.gram_matrix.entries*r)
+            if is_necessary_halfspace(vd.gram_matrix.entries,cone_roots,r)
                 @debug "degeneration"
                 push!(cone_roots,r)
             end
@@ -523,9 +528,10 @@ function cone_roots(vd,roots_at_distance_zero)
         end
         @debug "have $(length(cone_roots)) cone roots" 
     end
-
-    cone_roots = drop_redundant_halfspaces(cone_roots)
-    @info "have $(length(cone_roots)) cone roots"
+    
+    #@info "before dropping have $(length(cone_roots)) roots"
+    cone_roots = drop_redundant_halfspaces(vd.gram_matrix.entries,cone_roots)
+    #@info "have $(length(cone_roots)) cone roots"
     for r in cone_roots
         @info r
     end
@@ -563,13 +569,13 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     #@info "roots_for_pair($pair,$prev_roots)"
     roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,l-k^2*vd.diagonal_values[1],prev_roots_constraints,t2_cache)
     
-    @toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles with previous roots should be acute."
+    @assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles with previous roots should be acute."
     # just in case
     filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
-    @toggled_assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
-    @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
-    @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
-    @toggled_assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) """
+    @assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
+    @assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
+    @assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
+    @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) """
     Two roots at same distance to basepoint, and both acute with previous ones, should be acute with each other:
     * why?
     * distance is $fake_dist ≈ $(approx(fake_dist)))

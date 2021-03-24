@@ -141,7 +141,7 @@ version = "0.14.5"
 
 [[CoxeterDiagrams]]
 deps = ["Debugger", "Memoize", "StaticArrays"]
-git-tree-sha1 = "b02ce75d4110ac3d9deb7de9af1d6018b5facdc8"
+git-tree-sha1 = "5bf25941cb21fec9f80a940c51b9cd1033137365"
 repo-rev = "master"
 repo-url = "https://github.com/bottine/CoxeterDiagrams"
 uuid = "031067e9-6044-4365-9518-ddaf8d94f8f1"
@@ -262,9 +262,9 @@ version = "0.8.11"
 
 [[LDLFactorizations]]
 deps = ["AMD", "LinearAlgebra", "SparseArrays", "Test"]
-git-tree-sha1 = "5e41f142f6511bb685bb8f4f232f5d82d7fa408e"
+git-tree-sha1 = "399bbe845e06e1c2d44ebb241f554d45eaf66788"
 uuid = "40e66cde-538c-5869-a4ad-c39174c6795b"
-version = "0.8.0"
+version = "0.8.1"
 
 [[LibGit2]]
 deps = ["Printf"]
