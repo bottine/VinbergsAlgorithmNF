@@ -11,7 +11,7 @@ lattices = [
     )
 ]
 
-@testset "Some reflective lattices over ℚ(√5)" begin
+@testset "Some reflective lattices over ℚ(√13)" begin
     
     for (name,matrix,known_roots) in lattices
         @testset "$name" begin

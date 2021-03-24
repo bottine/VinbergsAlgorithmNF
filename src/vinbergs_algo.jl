@@ -342,6 +342,7 @@ function extend_root_stem(
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
     root_length,
+    root_length_minus_stem_norm_squared,
     constraints::AffineConstraints,
     t2_cache::BoundedT2ElemsCache
 )
@@ -369,11 +370,12 @@ function extend_root_stem(
     ring = vd.ring
     space = vd.quad_space
     P = infinite_places(field)
+    l = root_length
+
 
 
     # stem = [k₀,…,k_j]
 
-    l = root_length
     #@info tab * "extend_root_stem($stem, $root_length)"
 
     if j == vd.dim + 1
@@ -392,7 +394,14 @@ function extend_root_stem(
             return Vector{Vector{NfAbsOrdElem}}()
         end
 
-    elseif j == vd.dim
+    end
+
+    α_j = vd.diagonal_values[j]
+    v_j = vd.diagonal_basis[j]    
+    s_j = vd.scaling[j]
+    l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) # S_j should be computed incrementally since S_{j+1} = S_j - stem[j+1]^2*diag_value[j+1] 
+
+    if j == vd.dim
       
         # If k₁,…,k_{j-1} are chosen and k_j is the last one that needs to be found.
         # If (α₁,…,α_j) is the diagonalized inner product, and r = (k₁,…,k_j) the root to be found, of normed² == l, then
@@ -401,15 +410,13 @@ function extend_root_stem(
         #   ∑_{i=1}^{j-1} k_i^2α_i + k_j^2α_j == normed²(r) == l 
         #
         # Which means k_j^2 = (l - ∑_{i=1}^{j-1}k_i^2α_i)/α_j.
-        issquare,square_root = Hecke.issquare((l - sum([stem[i]^2*vd.diagonal_values[i] for i in 1:j-1]))//vd.diagonal_values[j])
+        issquare,square_root = Hecke.issquare(l_j//α_j)
         
-        α = vd.diagonal_values[j]
-        s = vd.scaling[j]
         
-        if issquare && divides(l,2*square_root*α,ring) # crystal
+        if issquare && divides(l,2*square_root*α_j,ring) # crystal
             return vcat(
                 [   
-                 extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .*vd.diagonal_basis[j],root_length,update_constraints(constraints,j,k*vd.diagonal_values[j]),t2_cache) 
+                 extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* v_j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache) 
                     for k in unique([square_root,-square_root])
                 ]...
             )            
@@ -424,32 +431,34 @@ function extend_root_stem(
         # does not work yet
         #interval_k_j = interval_for_k_j(constraints,j)
         #@info "interval $interval_k_j"
-
-        α = vd.diagonal_values[j]
-        s = vd.scaling[j]
-        S_j = l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) # S_j should be computed incrementally since S_{j+1} = S_j - stem[j+1]^2*diag_value[j+1] 
-       
-
-        #upscaled_candidates_k_j = short_t2_elems(vd.ring, 0,approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1) # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
         
-        function conjugates_of_bounded_length(k)
-            sat = all(≤(field(α*(k//s.elem_in_nf)^2),field(S_j),p) for p in P)
+        
+        #
+        #       k^2α ≤ l_j at all places
+        #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
+        #
+        function conjugates_of_bounded_length(sk)
+            sat = all(≤(field(α_j*(sk//s_j.elem_in_nf)^2),field(l_j),p) for p in P)
             return sat
         end
-        function crystal(k) 
-            sat = divides(l,2*(k//s.elem_in_nf)*α,ring)
+        
+        #
+        # l | 2kα  ⇔  2kα/l ∈ ring  ⇔  sk (2α//ls) ∈ ring 
+        #
+        function crystal(sk) 
+            sat = divides(l,2*(sk//s_j.elem_in_nf)*α_j,ring)
             return sat
         end
 
         upscaled_candidates_k_j = bounded_t2_elems(
             vd.ring, 
-            approx_sum_at_places(field(S_j*s^2)//field(α),first_place_idx=1)+1, 
+            approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1, 
             t2_cache, 
             [conjugates_of_bounded_length,crystal,],
-        )
+        )# TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
 
 
-        candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s, upscaled_candidates_k_j)
+        candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s_j, upscaled_candidates_k_j)
         @assert isempty(candidates_k_j) || candidates_k_j[1] == 0
         
         
@@ -457,7 +466,7 @@ function extend_root_stem(
         ###################################### This should probably be moved inside the bounded_t2_elems call for consistency with the other filters 
         all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim) # this can be precomputed and stored in vd
         integral(k) = all(
-            all_zero_on_coord_after(vd,j,idx) ⇒ (stem_can_rep[idx] + k*(vd.diagonal_basis[j][idx]) ∈ ring) 
+            all_zero_on_coord_after(vd,j,idx) ⇒ (stem_can_rep[idx] + k*(v_j[idx]) ∈ ring) 
             for idx in 1:vd.dim
         )
         ######################################
@@ -471,7 +480,7 @@ function extend_root_stem(
             end
         end=#
 
-        return vcat([extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* vd.diagonal_basis[j],root_length,update_constraints(constraints,j,k*vd.diagonal_values[j]),t2_cache) for k in candidates_k_j]...)
+        return vcat([extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* v_j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache) for k in candidates_k_j]...)
     end
     
 end
@@ -483,7 +492,7 @@ function roots_at_distance_zero(vd::VinbergData)
     zero_stem = nf_elem[vd.field(0)]
     zero_stem_can_rep = nf_elem[vd.field(0) for i in 1:vd.dim]
     
-    return vcat([extend_root_stem(vd,zero_stem,zero_stem_can_rep,l,no_constraints,t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
+    return vcat([extend_root_stem(vd,zero_stem,zero_stem_can_rep,l,l,no_constraints,t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
 end
 
 function cone_roots(vd,roots_at_distance_zero)
@@ -535,6 +544,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     end
 
     (k,l) = pair
+    fake_dist = -(k^2)*vd.diagonal_values[1].elem_in_nf//(l.elem_in_nf)
    
     ######################## The following only useful for non-diags
     all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
@@ -551,7 +561,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     prev_roots_constraints = (prev_roots_diag,prev_roots_diag_bound,prev_roots_diag_last_non_zero_coordinate)
 
     #@info "roots_for_pair($pair,$prev_roots)"
-    roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,prev_roots_constraints,t2_cache)
+    roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,l-k^2*vd.diagonal_values[1],prev_roots_constraints,t2_cache)
     
     @toggled_assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles with previous roots should be acute."
     # just in case
@@ -559,7 +569,13 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     @toggled_assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
     @toggled_assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @toggled_assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
-    @toggled_assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) "Two roots at same distance to basepoint, and both compatible with previous ones, should be compatible with each other: why? ($roots)"
+    @toggled_assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) """
+    Two roots at same distance to basepoint, and both acute with previous ones, should be acute with each other:
+    * why?
+    * distance is $fake_dist ≈ $(approx(fake_dist)))
+    * roots are  $roots
+    * angles = $([(times(vd,r₁,r₂),approx(times(vd,r₁,r₂))) for r₁ in roots for r₂ in roots if r₁≠r₂])
+    """
    
     
     return roots
@@ -571,7 +587,7 @@ function roots_for_next_pair!(vd,dict,prev_roots;t2_cache=nothing)
     pair = next_min_pair!(vd,dict)
     k,l = pair
     fake_dist = -(k^2)*vd.diagonal_values[1].elem_in_nf//(l.elem_in_nf)
-    @info "next pair is $pair (fake_dist is $fake_dist approx $(approx(fake_dist)))"
+    @info "next pair is $pair (fake_dist is $fake_dist ≈ $(approx(fake_dist)))"
 
 
     # Here we should assert that the roots in prev_roots are actually closer than the next min pair can give us, otherwise we will get inconsistencies
