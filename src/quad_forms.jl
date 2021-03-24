@@ -211,13 +211,17 @@ function colinear(
 
 end
 
+function Gram_coeff(space, r₁, r₂)
+    return Hecke.inner_product(space,r₁,r₂)^2//(Hecke.inner_product(space,r₁,r₁)*Hecke.inner_product(space,r₂,r₂))
+end
+
 function Coxeter_coeff(space, ring, r₁, r₂)
     
 
     @toggled_assert is_root(space, ring, r₁) && is_root(space, ring, r₂) "The elements must be roots"
 
-    angle = Hecke.inner_product(space,r₁,r₂)
-    cos² = approx(angle^2//(Hecke.inner_product(space,r₁,r₁)*Hecke.inner_product(space,r₂,r₂)))
+    
+    cos² = approx(Gram_coeff(space,r₁,r₂))
     if cos² == 0
         return 2
     elseif cos² == 1
@@ -240,7 +244,7 @@ function Coxeter_coeff(space, ring, r₁, r₂)
 
 end
 
-function get_Coxeter_matrix(space, ring, roots) 
+function Coxeter_matrix(space, ring, roots) 
     if isempty(roots)
         reshape(Int[],0,0)
     else

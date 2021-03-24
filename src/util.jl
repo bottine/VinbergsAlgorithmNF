@@ -112,7 +112,7 @@ function is_necessary_halfspace(cone_roots,root)
     x = Variable(n)
     p = maximize(big(0); numeric_type=BigFloat)       # satisfiability question 
     for float_cone_root in float_cone_roots
-        p.constraints += x' * float_cone_root ≤ big(0) # hyperplanes defining the cone
+        p.constraints += x' * float_cone_root ≤ big(0)# + big(2)^(-32) # hyperplanes defining the cone
     end
     p.constraints += x' * float_root ≥ big(1) # other side of the half space defined by root
     # it should only be strictly bigger than zero, but Convex.jl does not do "strictly", so we change it to ≥ 1 (and since we have a cone, it should be the same result)

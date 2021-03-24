@@ -574,6 +574,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     * why?
     * distance is $fake_dist ≈ $(approx(fake_dist)))
     * roots are  $roots
+    * gram = $([approx(Gram_coeff(vd.quad_space,r₁,r₂)) for r₁ in roots for r₂ in roots if r₁≠r₂])
     * angles = $([(times(vd,r₁,r₂),approx(times(vd,r₁,r₂))) for r₁ in roots for r₂ in roots if r₁≠r₂])
     """
    
@@ -636,8 +637,8 @@ function next_n_roots!(
     t2_cache=nothing
 )
 
-        Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
-        das = build_diagram_and_subs(Coxeter_matrix,vd.dim-1)
+        Cox_matrix = Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
+        das = build_diagram_and_subs(Cox_matrix,vd.dim-1)
         dict = init_least_k_by_root_norm_squared(vd)
     
         return next_n_roots!(vd,prev_roots,dict,das;n=n,t2_cache=t2_cache)

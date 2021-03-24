@@ -210,7 +210,7 @@ version = "0.9.5"
 
 [[Hecke]]
 deps = ["AbstractAlgebra", "Dates", "Distributed", "InteractiveUtils", "Libdl", "LinearAlgebra", "Markdown", "Nemo", "Pkg", "Printf", "Profile", "Random", "RandomExtensions", "Requires", "Serialization", "SparseArrays", "Test"]
-git-tree-sha1 = "c02109a2eb418a271cad695bcab9c97d6f3a8b1e"
+git-tree-sha1 = "cec8f853d3fde8400e7bc51eb13816987ec23497"
 repo-rev = "master"
 repo-url = "https://github.com/thofma/Hecke.jl.git"
 uuid = "3e1990a7-5d81-5526-99ce-9ba3ff248f21"
