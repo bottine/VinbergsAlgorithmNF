@@ -99,13 +99,14 @@ Base.copy(x::NfAbsOrdElem) = x # Otherwise Nemo throws errors on small matrices
 function is_necessary_halfspace(gram,cone_roots,root) 
    
     
-    #@info "is_necessary_halfspace($cone_roots,$root)"
+    #@info "is_necessary_halfspace($gram,$cone_roots,$root)"
 
     #float_cone_roots = Vector{Vector{BigFloat}}([[approx(r,1024) for r in cone_root] for cone_root in cone_roots])    
     #float_root_grammed = Vector{BigFloat}([approx(r,1024) for r in -gram*root])
-    float_cone_roots_grammed = Vector{Vector{BigFloat}}([[approx(r,1024) for r in -gram*cone_root] for cone_root in cone_roots])    
-    float_root_grammed = Vector{BigFloat}([approx(r,1024) for r in -gram*root])
+    float_cone_roots_grammed = Vector{Vector{BigFloat}}([[approx(r,1024) for r in gram*cone_root] for cone_root in cone_roots])    
+    float_root_grammed = Vector{BigFloat}([approx(r,1024) for r in gram*root])
     
+    #@info "becomes ($float_cone_roots_grammed,$float_root_grammed)"
     
     n = length(root) 
 
@@ -115,8 +116,8 @@ function is_necessary_halfspace(gram,cone_roots,root)
     #x = Variable(n, IntVar)
     x = Variable(n)
     p = maximize(big(0), numeric_type=BigFloat)       # satisfiability question 
-    for float_cone_root in float_cone_roots_grammed
-        p.constraints += x' * float_cone_root ≤ big(0) # + big(2)^(-256) # hyperplanes defining the cone
+    for float_cone_root_grammed in float_cone_roots_grammed
+        p.constraints += x' * float_cone_root_grammed ≤ big(0) # + big(2)^(-256) # hyperplanes defining the cone
     end
     p.constraints += x' * float_root_grammed ≥ big(1) # other side of the half space defined by root
     # it should only be strictly bigger than zero, but Convex.jl does not do "strictly", so we change it to ≥ 1 (and since we have a cone, it should be the same result)
@@ -128,10 +129,8 @@ function is_necessary_halfspace(gram,cone_roots,root)
    
 
     if p.status == MathOptInterface.INFEASIBLE
-        #@info "not necessary"
         return false
     elseif p.status == MathOptInterface.OPTIMAL
-        #@info "necessary"
         #println(p.optval)
         return true
     else

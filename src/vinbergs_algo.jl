@@ -513,14 +513,13 @@ function cone_roots(vd,roots_at_distance_zero)
     @assert len == length(roots_at_distance_zero) "did we drop a root while reorgarizing them?"
     
     cone_roots = Vector{Vector{nf_elem}}()
-    @debug "starting with $(length(roots_at_distance_zero)) at dist zero"
 
 
     for r in roots_at_distance_zero
         @debug "looking at $r"
         if  all((-1)*r ≠ cr for cr in cone_roots)
             @debug "so far so good"
-            if is_necessary_halfspace(vd.gram_matrix.entries,cone_roots,r)
+            if is_necessary_halfspace(vd.gram_matrix.entries,cone_roots,-r)
                 @debug "degeneration"
                 push!(cone_roots,r)
             end
@@ -529,9 +528,9 @@ function cone_roots(vd,roots_at_distance_zero)
         @debug "have $(length(cone_roots)) cone roots" 
     end
     
-    #@info "before dropping have $(length(cone_roots)) roots"
     cone_roots = drop_redundant_halfspaces(vd.gram_matrix.entries,cone_roots)
-    #@info "have $(length(cone_roots)) cone roots"
+    @assert all(times(vd,r₁,r₂) ≤ 0 for r₁ in cone_roots for r₂ in cone_roots if r₁≠r₂)
+
     for r in cone_roots
         @info r
     end
@@ -570,19 +569,10 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,l-k^2*vd.diagonal_values[1],prev_roots_constraints,t2_cache)
     
     @assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles with previous roots should be acute."
-    # just in case
-    filter!(root -> all(times(vd,root,prev) ≤ 0 for prev in prev_roots),roots)
     @assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
     @assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
-    @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) """
-    Two roots at same distance to basepoint, and both acute with previous ones, should be acute with each other:
-    * why?
-    * distance is $fake_dist ≈ $(approx(fake_dist)))
-    * roots are  $roots
-    * gram = $([approx(Gram_coeff(vd.quad_space,r₁,r₂)) for r₁ in roots for r₂ in roots if r₁≠r₂])
-    * angles = $([(times(vd,r₁,r₂),approx(times(vd,r₁,r₂))) for r₁ in roots for r₂ in roots if r₁≠r₂])
-    """
+    @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) "Two roots at same distance and compatible with everything before them should be compatible with each other." 
    
     
     return roots
@@ -629,9 +619,18 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
 
 
         if is_finite_volume(das)
+            # Sanity checks
+            @assert all(is_root(vd.quad_space,vd.ring,r) for r in roots)
+            @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂)
+            @assert all(fake_dist_to_basepoint(vd,roots[i]) ≤ fake_dist_to_basepoint(vd,roots[i+1]) for i in 1:length(roots)-1)
             return (true,(roots,dict,das))
         end
     end
+
+    # Sanity checks
+    @assert all(is_root(vd.quad_space,vd.ring,r) for r in roots)
+    @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂)
+    @assert all(fake_dist_to_basepoint(vd,roots[i]) ≤ fake_dist_to_basepoint(vd,roots[i+1]) for i in 1:length(roots)-1)
 
     return (false,(roots,dict,das))
 end
