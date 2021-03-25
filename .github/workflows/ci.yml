@@ -39,10 +39,6 @@ jobs:
             ${{ runner.os }}-test-${{ env.cache-name }}-
             ${{ runner.os }}-test-
             ${{ runner.os }}-
-      - run: |
-          julia -e '
-            using Pkg
-            Pkg.add(PackageSpec(url="https://github.com/bottine/CoxeterDiagrams"))'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
 
