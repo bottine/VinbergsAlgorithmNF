@@ -19,6 +19,8 @@ lattices = [
         "diag_-2ψ,1,etc", # Found in Guglielmetti page 132 WARNING: MY RESULT DOES NOT MATCH HIS
         VA.diagm(L,[-2ψ,1,-4ψ-10θ-14ϕ]),
         [[0, -1, 0],[0, 0, 2*(2ϕ)^2 + (2*ϕ) - 5],[2*(2ϕ)^2 + 2ϕ - 4, (2ϕ)^2 - 2, 0],[-2*(2ϕ)^2 - 4*ϕ + 5, 0, -3*(2ϕ)^2 - 4*ϕ + 7]]
+        # For reference, AlVin yields, if I didn't messu up the translation
+        # [[0,-1,0],[0,0,-1],[1,-2ϕ,0],[-2θ-4ϕ,-2ϕ,2ψ],[-2ψ-4θ-8ϕ,0,-2θ-2ϕ]]
     )
 ]
 
