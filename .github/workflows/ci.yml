@@ -19,17 +19,10 @@ jobs:
           - ubuntu-latest
         arch:
           - x64
-          - x86
         include:
           # test macOS and Windows with latest Julia only
           - os: macOS-latest
             arch: x64
-            version: 1
-          - os: windows-latest
-            arch: x64
-            version: 1
-          - os: windows-latest
-            arch: x86
             version: 1
     steps:
       - uses: actions/checkout@v2
@@ -48,7 +41,7 @@ jobs:
             ${{ runner.os }}-test-
             ${{ runner.os }}-
       - run: |
-          julia '
+          julia -e '
             using Pkg
             Pkg.add("https://github.com/bottine/CoxeterDiagrams")'
       - uses: julia-actions/julia-buildpkg@v1
