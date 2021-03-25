@@ -65,7 +65,7 @@ function VinbergData(number_field,gram_matrix)
     diago_over_scalingsq = [α//(s.elem_in_nf^2) for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 
     two_diago_over_scaling_times_length = Dict([l => (2//l.elem_in_nf) .* diago_over_scaling for l in lengths])::Dict{NfAbsOrdElem{AnticNumberField,nf_elem},Vector{nf_elem}}
     
-    is_last_on_coord(vecs,v_i,c_i) = vecs[v_i][c_i]≠0 && all(vecs[i][c_i] == 0 for i in v_i:length(vecs))
+    is_last_on_coord(vecs,v_i,c_i) = vecs[v_i][c_i]≠0 && all(vecs[i][c_i] == 0 for i in v_i+1:length(vecs))
     diago_vector_last_on_coordinates =[filter(c_i -> is_last_on_coord(diagonal_basis_vecs,v_i,c_i), 1:n) for v_i in 1:n] ::Vector{Vector{Int}}
     # -------------------
 
