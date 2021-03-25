@@ -16,6 +16,13 @@ mutable struct VinbergData
 
 
     possible_root_norms_squared_up_to_squared_units::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+
+    # Precomputed stuff:
+    # diago_over_scaling::Vector{nf_elem}
+    # diago_over_scalingsq::Vector{nf_elem}
+    # two_diago_over_scaling_times_length::Dict{NfAbsordElem,Vector{nf_elem}}
+    # diago_vector_last_on_coordinates::Vector{Vector{Int}}
+
 end
 
 
@@ -51,6 +58,17 @@ function VinbergData(number_field,gram_matrix)
     @assert negative_vector_index == 1
     #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
 
+    lengths = ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space))
+   
+    # Precomputations ---
+    diago_over_scaling = [α//s.elem_in_nf for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 
+    diago_over_scalingsq = [α//(s.elem_in_nf^2) for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 
+    two_diago_over_scaling_times_length = Dict([l => (2//l.elem_in_nf) .* diago_over_scaling for l in lengths])::Dict{NfAbsOrdElem{AnticNumberField,nf_elem},Vector{nf_elem}}
+    
+    is_last_on_coord(vecs,v_i,c_i) = vecs[v_i][c_i]≠0 && all(vecs[i][c_i] == 0 for i in v_i:length(vecs))
+    diago_vector_last_on_coordinates =[filter(c_i -> is_last_on_coord(diagonal_basis_vecs,v_i,c_i), 1:n) for v_i in 1:n] ::Vector{Vector{Int}}
+    # -------------------
+
     vd =  VinbergData(
         n,
         number_field,
@@ -62,7 +80,12 @@ function VinbergData(number_field,gram_matrix)
         scaling,
         Matrix(matrix(number_field,diagonal_basis_vecs))',    # notice the transpose here and below. Much frustration took place before I found out I needed those!
         Matrix(inv(matrix(number_field,diagonal_basis_vecs)))',
-        ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space)))
+        lengths,
+    # diago_over_scaling,
+    # diago_over_scalingsq,
+    # two_diago_over_scaling_times_length,
+    # diago_vector_last_on_coordinates,
+    )
 
     @info "Matrix is $gram_matrix"
     @info "Basepoint is $(basepoint(vd))"
@@ -154,22 +177,22 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
     ring = vd.ring
     field = vd.field
 
-    α = vd.diagonal_values[1]
-    s = vd.scaling[1]
+    α_1 = vd.diagonal_values[1]
+    s_1 = vd.scaling[1]
 
-    @assert α < 0 
+    @assert α_1 < 0 
 
-    M = approx_sum_at_places(field(l*s^2)//field(α),first_place_idx=2)
+    M = approx_sum_at_places(field(l*s_1^2)//field(α_1),first_place_idx=2)
     P = infinite_places(field)
-    k_min_squared_approx = approx(field((k_min*s)^2))
-    k_max_squared_approx = approx(field((k_max*s)^2))
+    k_min_squared_approx = approx(field((k_min*s_1)^2))
+    k_max_squared_approx = approx(field((k_max*s_1)^2))
 
     upscaled_candidates = short_t2_elems(ring, k_min_squared_approx-1 , k_max_squared_approx  + M + 1)
     # short_t2_elems only spits out non-zero stuff, and either k or -k, but not both (for any k)
 
     map!(abs, upscaled_candidates, upscaled_candidates) # Ensures all are positive  
     
-    candidates::Vector{nf_elem} = map(k -> k.elem_in_nf//s, upscaled_candidates) # Correct the scaling  
+    candidates::Vector{nf_elem} = map(k -> k.elem_in_nf//s_1, upscaled_candidates) # Correct the scaling  
 
     #Only k>0 # this should not be needed
     # We only need k>0 because k=0 corresponds to hyperplane containing the basepoint, treated elsewhere
@@ -178,13 +201,13 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
    
     # crystallographic_condition
     filter!(
-        k -> divides(l,2*k*α,ring),
+        k -> divides(l,2*k*α_1,ring),
         candidates,    
     )
     
     # conjugates are of bounded length
     filter!(
-        k -> all(≤(α*k^2,l,p) for p in P[2:end]),
+        k -> all(≤(α_1*k^2,l,p) for p in P[2:end]),
         candidates,
     )
       
@@ -313,7 +336,7 @@ const AffineConstraints = Tuple{
     Vector{nf_elem},         # ≤ bound
     Vector{Int},           # last non non-zero coordinate
 }     
-const no_constraints = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
+no_constraints() = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
 
 function clearly_inconsistent(ac::AffineConstraints,idx,dim)
     (c_vectors,c_values,c_last_non_zero_coordinates) = ac 
@@ -431,37 +454,48 @@ function extend_root_stem(
         end
 
     else
+       
         
+
         #@info "$stem is not complete"
         
         # does not work yet
         #interval_k_j = interval_for_k_j(constraints,j)
         #@info "interval $interval_k_j"
-        
+       
+        α_over_s = α_j//s_j.elem_in_nf
+        α_over_s² = α_over_s//s_j.elem_in_nf
+        two_α_over_ls = 2*α_over_s//l
         
         #
         #       k^2α ≤ l_j at all places
         #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
+        #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
         #
         function conjugates_of_bounded_length(sk)
-            sat = all(≤(field(α_j*(sk//s_j.elem_in_nf)^2),field(l_j),p) for p in P)
+            #sat = all(≤(field(α_j*(sk//s_j.elem_in_nf)^2),field(l_j),p) for p in P)
+            sat = all(≤(sk^2*α_over_s²,l_j,p) for p in P)
             return sat
         end
         
         #
-        # l | 2kα  ⇔  2kα/l ∈ ring  ⇔  sk (2α//ls) ∈ ring 
+        #       l | 2kα  
+        #    ⇔  2kα/l ∈ ring  
+        #    ⇔  sk (2α//ls) ∈ ring 
+        #    ⇔  sk (two_α_over_ls) ∈ ring 
         #
         function crystal(sk) 
-            sat = divides(l,2*(sk//s_j.elem_in_nf)*α_j,ring)
+            #sat = divides(l,2*(sk//s_j.elem_in_nf)*α_j,ring)
+            sat = ((sk * two_α_over_ls) ∈ ring)
             return sat
         end
 
         upscaled_candidates_k_j = bounded_t2_elems(
             vd.ring, 
-            approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1, 
+            approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1, # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
             t2_cache, 
             [conjugates_of_bounded_length,crystal,],
-        )# TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
+        )
 
 
         candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s_j, upscaled_candidates_k_j)
@@ -498,7 +532,7 @@ function roots_at_distance_zero(vd::VinbergData)
     zero_stem = nf_elem[vd.field(0)]
     zero_stem_can_rep = nf_elem[vd.field(0) for i in 1:vd.dim]
     
-    return vcat([extend_root_stem(vd,zero_stem,zero_stem_can_rep,l,l,no_constraints,t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
+    return vcat([extend_root_stem(vd,zero_stem,zero_stem_can_rep,l,l,no_constraints(),t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
 end
 
 function cone_roots(vd,roots_at_distance_zero)
@@ -574,7 +608,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,l-k^2*vd.diagonal_values[1],prev_roots_constraints,t2_cache)
     
     @assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles with previous roots should be acute."
-    @assert all(is_root(vd.quad_space,vd.ring,root) for root in roots) "All outputs of extend_root_stem must be roots"
+    @assert all(is_root(vd,root) for root in roots) "All outputs of extend_root_stem must be roots"
     @assert all(norm_squared(vd,root) == l for root in roots) "All outputs of extend_root_stem must have correct length"
     @assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
     @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂) "Two roots at same distance and compatible with everything before them should be compatible with each other." 
@@ -627,6 +661,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
             # Sanity checks
             @assert all(is_root(vd.quad_space,vd.ring,r) for r in roots)
             @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂)
+            @assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
             @assert all(fake_dist_to_basepoint(vd,roots[i]) ≤ fake_dist_to_basepoint(vd,roots[i+1]) for i in 1:length(roots)-1)
             return (true,(roots,dict,das))
         end
@@ -635,6 +670,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
     # Sanity checks
     @assert all(is_root(vd.quad_space,vd.ring,r) for r in roots)
     @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂)
+    @assert all(times(vd,r,basepoint(vd)) ≤ 0 for r in roots) "All outputs must have the basepoint on their negative side."
     @assert all(fake_dist_to_basepoint(vd,roots[i]) ≤ fake_dist_to_basepoint(vd,roots[i+1]) for i in 1:length(roots)-1)
 
     return (false,(roots,dict,das))
