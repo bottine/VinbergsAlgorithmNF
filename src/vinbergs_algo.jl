@@ -18,10 +18,10 @@ mutable struct VinbergData
     possible_root_norms_squared_up_to_squared_units::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
 
     # Precomputed stuff:
-    # diago_over_scaling::Vector{nf_elem}
-    # diago_over_scalingsq::Vector{nf_elem}
-    # two_diago_over_scaling_times_length::Dict{NfAbsordElem,Vector{nf_elem}}
-    # diago_vector_last_on_coordinates::Vector{Vector{Int}}
+    diago_over_scaling::Vector{nf_elem}
+    diago_over_scalingsq::Vector{nf_elem}
+    two_diago_over_scaling_times_length::Dict{NfAbsOrdElem{AnticNumberField,nf_elem},Vector{nf_elem}}
+    diago_vector_last_on_coordinates::Vector{Vector{Int}}
 
 end
 
@@ -81,10 +81,10 @@ function VinbergData(number_field,gram_matrix)
         Matrix(matrix(number_field,diagonal_basis_vecs))',    # notice the transpose here and below. Much frustration took place before I found out I needed those!
         Matrix(inv(matrix(number_field,diagonal_basis_vecs)))',
         lengths,
-    # diago_over_scaling,
-    # diago_over_scalingsq,
-    # two_diago_over_scaling_times_length,
-    # diago_vector_last_on_coordinates,
+        diago_over_scaling,
+        diago_over_scalingsq,
+        two_diago_over_scaling_times_length,
+        diago_vector_last_on_coordinates,
     )
 
     @info "Matrix is $gram_matrix"
@@ -287,8 +287,11 @@ end
 function bounded_t2_elems(
     ring,
     t2_bound,
-    cache, 
-    filters = []
+    cache,
+    places,
+    two_α_over_ls,
+    α_over_s²,
+    l_j,
 )
     
     int_bound = ceil(Int,t2_bound)
@@ -309,7 +312,7 @@ function bounded_t2_elems(
         append!(
             elems,
             filter(
-                x -> all(f(x) for f in filters),
+                   sk ->  ((sk * two_α_over_ls) ∈ ring) && all(≤(sk^2*α_over_s²,l_j,p) for p in places),
                 cache.elems[i],
             )
         )
@@ -322,7 +325,7 @@ function bounded_t2_elems(
         append!(
             elems,
             filter(
-                x -> Hecke.t2(x)≤ t2_bound && all(f(x) for f in filters),
+                sk -> Hecke.t2(sk)≤ t2_bound && ((sk * two_α_over_ls) ∈ ring) && all(≤(sk^2*α_over_s²,l_j,p) for p in places),
                 cache.elems[i]
             )
         )
@@ -463,38 +466,37 @@ function extend_root_stem(
         #interval_k_j = interval_for_k_j(constraints,j)
         #@info "interval $interval_k_j"
        
-        α_over_s = α_j//s_j.elem_in_nf
-        α_over_s² = α_over_s//s_j.elem_in_nf
-        two_α_over_ls = 2*α_over_s//l
-        
+        #α_over_s = α_j//s_j.elem_in_nf
+        α_over_s = vd.diago_over_scaling[j]
+        #α_over_s² = α_over_s//s_j.elem_in_nf
+        α_over_s² = vd.diago_over_scalingsq[j]
+        #two_α_over_ls = 2*α_over_s//l
+        two_α_over_ls = vd.two_diago_over_scaling_times_length[l][j]
+
+
+        #    Constraint on norm at al places:
         #
         #       k^2α ≤ l_j at all places
         #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
         #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
         #
-        function conjugates_of_bounded_length(sk)
-            #sat = all(≤(field(α_j*(sk//s_j.elem_in_nf)^2),field(l_j),p) for p in P)
-            sat = all(≤(sk^2*α_over_s²,l_j,p) for p in P)
-            return sat
-        end
-        
+
+        #    Constraint as given by the crystallographic condition:
         #
         #       l | 2kα  
         #    ⇔  2kα/l ∈ ring  
         #    ⇔  sk (2α//ls) ∈ ring 
         #    ⇔  sk (two_α_over_ls) ∈ ring 
         #
-        function crystal(sk) 
-            #sat = divides(l,2*(sk//s_j.elem_in_nf)*α_j,ring)
-            sat = ((sk * two_α_over_ls) ∈ ring)
-            return sat
-        end
 
         upscaled_candidates_k_j = bounded_t2_elems(
             vd.ring, 
             approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1, # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
             t2_cache, 
-            [conjugates_of_bounded_length,crystal,],
+            P,
+            two_α_over_ls,
+            α_over_s²,
+            l_j,
         )
 
 
@@ -504,10 +506,9 @@ function extend_root_stem(
         
         ###################################### The following only useful for non diagonal forms
         ###################################### This should probably be moved inside the bounded_t2_elems call for consistency with the other filters 
-        all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim) # this can be precomputed and stored in vd
         integral(k) = all(
-            all_zero_on_coord_after(vd,j,idx) ⇒ (stem_can_rep[idx] + k*(v_j[idx]) ∈ ring) 
-            for idx in 1:vd.dim
+            (stem_can_rep[idx] + k*(v_j[idx]) ∈ ring) 
+            for idx in vd.diago_vector_last_on_coordinates[j]
         )
         ######################################
         
@@ -623,7 +624,7 @@ function roots_for_next_pair!(vd,dict,prev_roots;t2_cache=nothing)
     pair = next_min_pair!(vd,dict)
     k,l = pair
     fake_dist = -(k^2)*vd.diagonal_values[1].elem_in_nf//(l.elem_in_nf)
-    @info "next pair is $pair (fake_dist is $fake_dist ≈ $(approx(fake_dist)))"
+    @info "next pair is $pair (fake_dist is $fake_dist ≈ $(approx(fake_dist,8)))"
 
 
     # Here we should assert that the roots in prev_roots are actually closer than the next min pair can give us, otherwise we will get inconsistencies
