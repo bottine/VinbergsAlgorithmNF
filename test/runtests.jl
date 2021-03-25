@@ -20,4 +20,4 @@ include("test_known_rational_lattices.jl")
 include("test_known_sqrt2_lattices.jl")
 include("test_known_sqrt5_lattices.jl")
 include("test_known_sqrt13_lattices.jl")
-# include("test_known_cos2piover7_lattices.jl") # strange errors with our choice of irred poly. New versions of Hecke should make it doable
+include("test_known_cos2piover7_lattices.jl")
