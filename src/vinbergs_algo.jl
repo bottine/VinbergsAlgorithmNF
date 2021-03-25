@@ -100,6 +100,11 @@ times(vd::VinbergData,u,v) = times(vd.quad_space,u,v)
 norm_squared(quad_space::Hecke.QuadSpace,u) = times(quad_space,u,u)
 norm_squared(vd::VinbergData,u) = times(vd.quad_space,u,u)
 
+is_root(vd::VinbergData, vector::Vector) = is_root(vd.quad_space,vd.ring,vector)
+Gram_coeff(vd::VinbergData,r₁::Vector,r₂::Vector) = Gram_coeff(vd.quad_space,r₁,r₂)
+Coxeter_coeff(vd::VinbergData,r₁::Vector,r₂::Vector) = Coxeter_coeff(vd.quad_space,vd.ring,r₁,r₂)
+Coxeter_matrix(vd,roots) = Coxeter_matrix(vd.quad_space,vd.ring,roots)
+
 """
     fake_dist_to_point(vd,point,root)
 
