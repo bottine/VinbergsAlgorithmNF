@@ -284,16 +284,59 @@ function BoundedT2ElemsCache(ring)
     return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{NfAbsOrdElem}}([[ring(0)]]))
 end
 
+
 function bounded_t2_elems(
     ring,
     t2_bound,
     cache,
+    interval,
     places,
     two_α_over_ls,
     α_over_s²,
     l_j,
 )
-    
+    (lb,ub) = interval
+    function good_elems(ordered,t2check)
+        isempty(ordered) && return nf_elem[]
+        lb === nothing && ( lb = ordered[1] )
+        ub === nothing && ( ub = ordered[end] )
+        
+        lb > ub && return nf_elem[]
+
+        good = nf_elem[]
+        if lb ≤ 0 && ub ≥ 0
+
+            last_idx_lb = searchsortedlast(≤(-ub),ordered)
+            last_idx_ub = searchsortedlast(≤(ub),ordered)
+
+            for i in 1:min(last_idx_ub,last_idx_lb)
+                k = vec[i]
+                if (!t2check && Hecke.t2(sk)≤ t2_bound) && 
+                    ((sk * two_α_over_ls) ∈ ring) && 
+                    all(≤(sk^2*α_over_s²,l_j,p) for p in places)
+                    if true # k satisfies the integrality condition
+                        push!(good,k)
+                    end
+                    if k≠0 && true # -k satisfies integrality
+                        push(good,-k)
+                    end
+                end
+            end
+            sign = (last_idx_ub > last_idx_lb ? +1 : -1)
+            for idx in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
+                if integrality(sign*k)
+                    push!(good,sign*k)
+                end
+            end
+
+        elseif lb ≥ 0 && ub ≥ 0
+
+        elseif lb ≤ 0 && lb ≤ 0
+
+        end
+        return good
+    end
+
     int_bound = ceil(Int,t2_bound)
     if int_bound > cache.bounds[end]
         with_margin = ceil(Int,int_bound*1.2)
@@ -339,7 +382,18 @@ const AffineConstraints = Tuple{
     Vector{nf_elem},         # ≤ bound
     Vector{Int},           # last non non-zero coordinate
 }     
-no_constraints() = (Vector{Vector{nf_elem}}(),Vector{nf_elem}(),Vector{Int}())
+
+
+function MkAffineConstraints(
+    vecs::Vector{Vector{nf_elem}}, # Previous roots
+    vals::Vector{nf_elem},         # ≤ bound
+)
+    @assert all(any(≠(0),vec) for vec in vecs)
+    last_nz = Int[findlast(≠(0),vec) for vec in vecs]
+    return (vecs,vals,last_nz)
+end
+
+no_constraints() = MkAffineConstraints(Vector{Vector{nf_elem}}(),Vector{nf_elem}())
 
 function clearly_inconsistent(ac::AffineConstraints,idx,dim)
     (c_vectors,c_values,c_last_non_zero_coordinates) = ac 
@@ -460,7 +514,6 @@ function extend_root_stem(
        
         
 
-        #@info "$stem is not complete"
         
         # does not work yet
         #interval_k_j = interval_for_k_j(constraints,j)
@@ -492,7 +545,8 @@ function extend_root_stem(
         upscaled_candidates_k_j = bounded_t2_elems(
             vd.ring, 
             approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1, # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
-            t2_cache, 
+            t2_cache,
+            (nothing,nothing),
             P,
             two_α_over_ls,
             α_over_s²,
@@ -512,7 +566,7 @@ function extend_root_stem(
         )
         ######################################
         
-        candidates_k_j = vcat(filter(k -> #=in_interval(k,interval_k_j) && =# integral(k),candidates_k_j), filter(k -> #=in_interval(k,interval_k_j) && =# integral(k), .- candidates_k_j[2:end])) # [2:end] since index 1 contains zero, which we don't want twice
+        candidates_k_j = vcat(filter(k -> #=in_interval(k,interval_k_j) &&=#  integral(k),candidates_k_j), filter(k ->#= in_interval(k,interval_k_j) &&=#  integral(k), .- candidates_k_j[2:end])) # [2:end] since index 1 contains zero, which we don't want twice
         #=for k in candidates_k_j
             if !in_interval(k,interval_k_j)
                 @info "$k out of bounds ? $interval_k_j"
@@ -602,8 +656,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     # Construct the constraints defined by the previous roots
     prev_roots_diag = [to_diag_rep(vd,prev_root) for prev_root in prev_roots]
     prev_roots_diag_bound = [-k*vd.diagonal_values[1]*prev_root[1] for prev_root in prev_roots_diag]
-    prev_roots_diag_last_non_zero_coordinate = [findlast(≠(0),prev_root) for prev_root in prev_roots_diag]
-    prev_roots_constraints = (prev_roots_diag,prev_roots_diag_bound,prev_roots_diag_last_non_zero_coordinate)
+    prev_roots_constraints = MkAffineConstraints(prev_roots_diag,prev_roots_diag_bound)
 
     #@info "roots_for_pair($pair,$prev_roots)"
     roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,l-k^2*vd.diagonal_values[1],prev_roots_constraints,t2_cache)

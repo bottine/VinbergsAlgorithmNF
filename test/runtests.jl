@@ -5,6 +5,12 @@ using LinearAlgebra
 
 VA = VinbergsAlgorithmNF
 
+# Unit tests, eventually:
+
+include("unit/vinbergs_algo.jl")
+
+
+
 # Helper functions
 inc_dists(vd,roots) = sort(map(r -> VA.fake_dist_to_basepoint(vd,r),roots))
 gram_coeffs(vd,roots) = sort([VA.Gram_coeff(vd.quad_space,r₁,r₂) for r₁ in roots for r₂ in roots])
