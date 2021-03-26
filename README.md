@@ -34,7 +34,7 @@ using Pkg; Pkg.activate(".")
 This should install whatever is necessary.
 Then
 
-```
+```julia
 using Hecke
 using VinbergsAlgorithmNF; VA = VinbergsAlgorithmNF
 ```
@@ -75,6 +75,7 @@ K,a = Hecke.rationals_as_number_field()
 * The code is still messy, buggy and slow.
 * The best way to understand how the functions above work is probably to just look at the code for now.
 * Questions welcome.
+* See the file(s?) in `scratchpad/` for a (some?) example(s?).
 
 
 
