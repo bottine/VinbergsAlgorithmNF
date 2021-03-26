@@ -5,8 +5,6 @@ version = "0.1.0"
 
 [deps]
 AbstractAlgebra = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
-COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
-Cbc = "9961bab8-2fa3-5c5a-9d89-47fab24efd76"
 Convex = "f65535da-76fb-5f13-bab9-19810c17039a"
 CoxeterDiagrams = "031067e9-6044-4365-9518-ddaf8d94f8f1"
 Hecke = "3e1990a7-5d81-5526-99ce-9ba3ff248f21"

@@ -3,7 +3,7 @@ module VinbergsAlgorithmNF
     using Hecke
     using ToggleableAsserts
     using CoxeterDiagrams
-    using Convex, COSMO, Cbc, Tulip
+    using Convex, Tulip
 
     import MathOptInterface
     import AbstractAlgebra
