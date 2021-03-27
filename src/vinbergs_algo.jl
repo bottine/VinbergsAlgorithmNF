@@ -285,58 +285,11 @@ function BoundedT2ElemsCache(ring)
 end
 
 
-function bounded_t2_elems(
+function bounded_t2_elems!(
     ring,
     t2_bound,
     cache,
-    interval,
-    places,
-    two_α_over_ls,
-    α_over_s²,
-    l_j,
 )
-    (lb,ub) = interval
-    function good_elems(ordered,t2check)
-        isempty(ordered) && return nf_elem[]
-        lb === nothing && ( lb = ordered[1] )
-        ub === nothing && ( ub = ordered[end] )
-        
-        lb > ub && return nf_elem[]
-
-        good = nf_elem[]
-        if lb ≤ 0 && ub ≥ 0
-
-            last_idx_lb = searchsortedlast(≤(-ub),ordered)
-            last_idx_ub = searchsortedlast(≤(ub),ordered)
-
-            for i in 1:min(last_idx_ub,last_idx_lb)
-                k = vec[i]
-                if (!t2check && Hecke.t2(sk)≤ t2_bound) && 
-                    ((sk * two_α_over_ls) ∈ ring) && 
-                    all(≤(sk^2*α_over_s²,l_j,p) for p in places)
-                    if true # k satisfies the integrality condition
-                        push!(good,k)
-                    end
-                    if k≠0 && true # -k satisfies integrality
-                        push(good,-k)
-                    end
-                end
-            end
-            sign = (last_idx_ub > last_idx_lb ? +1 : -1)
-            for idx in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
-                if integrality(sign*k)
-                    push!(good,sign*k)
-                end
-            end
-
-        elseif lb ≥ 0 && ub ≥ 0
-
-        elseif lb ≤ 0 && lb ≤ 0
-
-        end
-        return good
-    end
-
     int_bound = ceil(Int,t2_bound)
     if int_bound > cache.bounds[end]
         with_margin = ceil(Int,int_bound*1.2)
@@ -345,37 +298,27 @@ function bounded_t2_elems(
             x -> x∉cache.elems[end],
             short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]) .|> abs,
         )
-        #sort!(new_elems,rev=true)
+        sort!(new_elems)
         push!(cache.elems, new_elems)
     end
     
-    elems = Vector{NfAbsOrdElem}()
+    elems = Vector{Vector{NfAbsOrdElem}}()
     i=1
     while cache.bounds[i] ≤ t2_bound
-        append!(
-            elems,
-            filter(
-                   sk ->  ((sk * two_α_over_ls) ∈ ring) && all(≤(sk^2*α_over_s²,l_j,p) for p in places),
-                cache.elems[i],
-            )
-        )
+        push!(elems,cache.elems[i])
         i = i+1
         i > length(cache.bounds) && break
     end
         
     if i ≤ length(cache.bounds) && ( cache.bounds[i-1]≠t2_bound ) 
         # only those have to be checked exactly for boundedness
-        append!(
-            elems,
-            filter(
-                sk -> Hecke.t2(sk)≤ t2_bound && ((sk * two_α_over_ls) ∈ ring) && all(≤(sk^2*α_over_s²,l_j,p) for p in places),
-                cache.elems[i]
-            )
-        )
+        push!(elems,(@view cache.elems[i][ cache.elems[i] .|> (x ->Hecke.t2(x) ≤ t2_bound)]))
     end
     return elems 
 
 end
+
+
 
 const AffineConstraints = Tuple{
     Vector{Vector{nf_elem}}, # Previous roots
@@ -423,31 +366,35 @@ function in_interval(
 end
 
 
-function extend_root_stem(
+
+function _extend_root_stem(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
+    stem_length::Int,
     root_length,
     root_length_minus_stem_norm_squared,
     constraints::AffineConstraints,
     t2_cache::BoundedT2ElemsCache
 )
  
-    #@info "extend_root_stem $stem for length =  $root_length"
-
-    # helper function; checks that the vector v is all zeros starting from index i
     
-    j = length(stem) + 1
-
-    (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
+    j = stem_length + 1 
     
- 
-    #@info "stem is $stem"
-    #@info "bounds are:"
-    #@info "$([(r[j:end],b) for (r,b) in bounds])"
-   
+    #lol#println("| "^(j-1))
+    #lol#println("| "^(j-1), "---------------------------") 
+    #lol#println("| "^(j-1), "_extend_root_stem")
+    #lol#println("| "^(j-1), "stem                      :  ", stem)
+    #lol#println("| "^(j-1), "of length                 :  ", stem_length)
+    #lol#println("| "^(j-1), "stem_can_rep              :  ", stem_can_rep)
+    #lol#println("| "^(j-1), "root length               :  ", root_length)
+    #lol#println("| "^(j-1), "root length_minu_partial  :  ", root_length_minus_stem_norm_squared)
+    #lol#println("| "^(j-1), "constraints               :  ", constraints)
+    #lol#println("| "^(j-1), "---------------------------") 
+
      
-    if clearly_inconsistent(constraints,j,vd.dim) 
+    if clearly_inconsistent(constraints,j,vd.dim)
+        #lol#println("| "^(j-1), "out of bounds")
         return Vector{Vector{nf_elem}}()
     end
     
@@ -457,12 +404,10 @@ function extend_root_stem(
     space = vd.quad_space
     P = infinite_places(field)
     l = root_length
+    (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
 
 
 
-    # stem = [k₀,…,k_j]
-
-    #@info tab * "extend_root_stem($stem, $root_length)"
 
     if j == vd.dim + 1
         
@@ -472,11 +417,8 @@ function extend_root_stem(
 
         if is_integral(space, ring, stem_can_rep) && is_root(space,ring,field.(stem_can_rep),l) 
             # this is partially redundant since the integralness should already hold?
-            #@info tab * "and it's a root of length $l"
-            return Vector{Vector{NfAbsOrdElem}}([ring.(stem_can_rep)])
+            return Vector{Vector{NfAbsOrdElem}}([copy(ring.(stem_can_rep))])
         else
-            #@info "isnoroot"
-            #@info tab * "and it's bad (length is $(Hecke.inner_product(vd.quad_space,stem,stem)))"
             return Vector{Vector{NfAbsOrdElem}}()
         end
 
@@ -487,6 +429,13 @@ function extend_root_stem(
     s_j = vd.scaling[j]
     l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) # S_j should be computed incrementally since S_{j+1} = S_j - stem[j+1]^2*diag_value[j+1] 
 
+    #lol#println("| "^(j-1), "j is                      :  ", j)
+    #lol#println("| "^(j-1), "α_j is                    :  ", α_j)
+    #lol#println("| "^(j-1), "v_j is                    :  ", v_j)
+    #lol#println("| "^(j-1), "s_j is                    :  ", s_j)
+    #lol#println("| "^(j-1), "l_j is                    :  ", l_j)
+    #lol#println("| "^(j-1), "---------------------------") 
+    
     if j == vd.dim
       
         # If k₁,…,k_{j-1} are chosen and k_j is the last one that needs to be found.
@@ -500,12 +449,24 @@ function extend_root_stem(
         
         
         if issquare && divides(l,2*square_root*α_j,ring) # crystal
-            return vcat(
-                [   
-                 extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* v_j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache) 
-                    for k in unique([square_root,-square_root])
-                ]...
-            )            
+            roots = Vector{Vector{NfAbsOrdElem}}()
+            
+            k = square_root
+            stem_updated = copy(stem)
+            stem_can_rep_updated = copy(stem_can_rep)
+
+            stem_updated[j] = k
+            stem_can_rep_updated = stem_can_rep + k .* v_j
+
+            append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
+            if k ≠ 0
+                stem_updated[j] = -k
+                stem_can_rep_updated = stem_can_rep + -k .* v_j
+                append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
+            end
+            
+            return roots
+            
         else
             return Vector{Vector{NfAbsOrdElem}}()
         end
@@ -513,17 +474,22 @@ function extend_root_stem(
     else
        
         
-
+        bounded_t2_candidates_vectors = bounded_t2_elems!(
+            vd.ring, 
+            approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1,
+            t2_cache
+        )
         
+        #lol#println("| "^(j-1), "bounded t2 elems gives    :  ", bounded_t2_candidates_vectors)
+        #lol#println("| "^(j-1), "---------------------------") 
         # does not work yet
         #interval_k_j = interval_for_k_j(constraints,j)
-        #@info "interval $interval_k_j"
        
-        #α_over_s = α_j//s_j.elem_in_nf
+        #α_over_s = α_j//s_j
         α_over_s = vd.diago_over_scaling[j]
-        #α_over_s² = α_over_s//s_j.elem_in_nf
+        #α_over_s² = α//s_j^2
         α_over_s² = vd.diago_over_scalingsq[j]
-        #two_α_over_ls = 2*α_over_s//l
+        #two_α_over_ls = 2*α//(l*s_j)
         two_α_over_ls = vd.two_diago_over_scaling_times_length[l][j]
 
 
@@ -533,6 +499,7 @@ function extend_root_stem(
         #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
         #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
         #
+        good_norm(sk) = all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
 
         #    Constraint as given by the crystallographic condition:
         #
@@ -540,54 +507,124 @@ function extend_root_stem(
         #    ⇔  2kα/l ∈ ring  
         #    ⇔  sk (2α//ls) ∈ ring 
         #    ⇔  sk (two_α_over_ls) ∈ ring 
-        #
+        crystal(sk) = sk * two_α_over_ls ∈ ring
 
-        upscaled_candidates_k_j = bounded_t2_elems(
-            vd.ring, 
-            approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1, # TODO the +1 here is because of inexact computations --> can we make everything exact? --> yes in this case since here approx_sum_at_places ranges over all places, so probably just a trace or an exact t2 computation
-            t2_cache,
-            (nothing,nothing),
-            P,
-            two_α_over_ls,
-            α_over_s²,
-            l_j,
-        )
+        integral(a_stem_can_rep) = true #all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
 
 
-        candidates_k_j::Vector{nf_elem} = map(x -> x.elem_in_nf//s_j, upscaled_candidates_k_j)
-        @assert isempty(candidates_k_j) || candidates_k_j[1] == 0
+        roots = Vector{Vector{NfAbsOrdElem}}()
+        (global_lb,global_ub) = (nothing,nothing)
         
-        
-        ###################################### The following only useful for non diagonal forms
-        ###################################### This should probably be moved inside the bounded_t2_elems call for consistency with the other filters 
-        integral(k) = all(
-            (stem_can_rep[idx] + k*(v_j[idx]) ∈ ring) 
-            for idx in vd.diago_vector_last_on_coordinates[j]
-        )
-        ######################################
-        
-        candidates_k_j = vcat(filter(k -> #=in_interval(k,interval_k_j) &&=#  integral(k),candidates_k_j), filter(k ->#= in_interval(k,interval_k_j) &&=#  integral(k), .- candidates_k_j[2:end])) # [2:end] since index 1 contains zero, which we don't want twice
-        #=for k in candidates_k_j
-            if !in_interval(k,interval_k_j)
-                @info "$k out of bounds ? $interval_k_j"
-                @info "stem: $stem"
-                @info "constraints $constraints"
+        stem_updated = copy(stem)
+        stem_can_rep_updated = copy(stem_can_rep)
+
+        for ordered in bounded_t2_candidates_vectors
+            
+            isempty(ordered) && continue
+            #lol#println("| "^(j-1), "looking at                :  ", ordered)
+            #lol#println("| "^(j-1), "global_lb                 :  ", global_lb)
+            #lol#println("| "^(j-1), "global_ub                 :  ", global_ub)
+            
+            lb = (global_lb === nothing ? -ordered[end] : global_lb)
+            ub = (global_ub === nothing ? ordered[end] : global_ub)
+            #lol#println("| "^(j-1), "       lb                 :  ", global_lb)
+            #lol#println("| "^(j-1), "       ub                 :  ", global_ub)
+            
+            lb > ub && continue 
+
+            if lb ≤ 0 && ub ≥ 0
+
+                last_idx_lb = searchsortedlast(ordered,-lb)
+                last_idx_ub = searchsortedlast(ordered,ub)
+
+                #lol#println("| "^(j-1), "indices from to           :  ", last_idx_ub, "∧", last_idx_lb)
+
+                for i in 1:min(last_idx_ub,last_idx_lb)
+                    #lol#println("| "^(j-1), "index                     :  ", i)
+                    sk = ordered[i]
+                    #lol#println("| "^(j-1), "sk,                       :  ", sk)
+                    #lol#println("| "^(j-1), "crystal:                  :  ", crystal(sk))
+                    #lol#println("| "^(j-1), "good_norm                 :  ", good_norm(sk), ", ")
+                    if crystal(sk) && good_norm(sk)
+                        k = sk // s_j.elem_in_nf
+                        #lol#println("| "^(j-1), "k                         :  ", k)
+                        stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
+                        stem_can_rep_updated = stem_can_rep + k .* v_j
+                        if integral(stem_can_rep_updated) 
+                            append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
+                        end
+                        if k≠0
+                            stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
+                            stem_can_rep_updated = stem_can_rep - k .* v_j
+                            if integral(stem_can_rep_updated) 
+                                append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
+                            end
+                        end
+                    end
+                end
+
+                sign = (last_idx_ub > last_idx_lb ? +1 : -1)
+                for idx in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
+                    @assert false "To come when intervals work"
+                    if integrality(sign*k)
+                        push!(good,sign*k)
+                    end
+                end
+
+            elseif lb ≥ 0 && ub ≥ 0
+                @assert false "To come when intervals work"
+            elseif lb ≤ 0 && lb ≤ 0
+                @assert false "To come when intervals work"
             end
-        end=#
+            #lol#println("| "^(j-1), "---------------------------") 
 
-        return vcat([extend_root_stem(vd,vcat(stem,[k]),stem_can_rep + k .* v_j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache) for k in candidates_k_j]...)
+        end
+
+         
+        #lol#println("| "^(j-1), "roots are                 :  ", roots)
+        return roots
+
     end
     
 end
 
+function extend_root_stem(
+    vd::VinbergData,
+    stem_diag_rep::Vector{nf_elem},
+    root_length,
+    constraints::AffineConstraints,
+    t2_cache::BoundedT2ElemsCache
+)
+    stem_length = length(stem_diag_rep)
+    stem_diag_rep = vcat(stem_diag_rep,fill(vd.field(0),vd.dim-length(stem_diag_rep)))
+    stem_can_rep = to_can_rep(vd,stem_diag_rep)
+    
+    stem_norm_squared = norm_squared(vd,stem_can_rep)
+    
+    j = 1
+    #lol#println("| "^(j-1))
+    #lol#println("| "^(j-1), "---------------------------") 
+    #lol#println("| "^(j-1), "extend_root_stem")
+    #lol#println("| "^(j-1), "stem_diag_rep             :  ", stem_diag_rep)
+    #lol#println("| "^(j-1), "of length                 :  ", stem_length)
+    #lol#println("| "^(j-1), "stem_can_rep              :  ", stem_can_rep)
+    #lol#println("| "^(j-1), "root length               :  ", root_length)
+    #lol#println("| "^(j-1), "root length_minu_partial  :  ", root_length - stem_norm_squared)
+    #lol#println("| "^(j-1), "constraints               :  ", constraints)
+    #lol#println("| "^(j-1), "---------------------------") 
+
+
+
+    #@info "roots_for_pair($pair,$prev_roots)"
+    return  _extend_root_stem(vd,stem_diag_rep,stem_can_rep,stem_length,root_length,root_length-stem_norm_squared,constraints,t2_cache)
+end
 
 function roots_at_distance_zero(vd::VinbergData)
 
     t2_cache = BoundedT2ElemsCache(vd.ring) 
     zero_stem = nf_elem[vd.field(0)]
-    zero_stem_can_rep = nf_elem[vd.field(0) for i in 1:vd.dim]
     
-    return vcat([extend_root_stem(vd,zero_stem,zero_stem_can_rep,l,l,no_constraints(),t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
+    return vcat([extend_root_stem(vd,zero_stem,l,no_constraints(),t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
 end
 
 function cone_roots(vd,roots_at_distance_zero)
@@ -659,7 +696,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     prev_roots_constraints = MkAffineConstraints(prev_roots_diag,prev_roots_diag_bound)
 
     #@info "roots_for_pair($pair,$prev_roots)"
-    roots = extend_root_stem(vd,[k],k .* vd.diagonal_basis[1],l,l-k^2*vd.diagonal_values[1],prev_roots_constraints,t2_cache)
+    roots = extend_root_stem(vd,[k],l,prev_roots_constraints,t2_cache)
     
     @assert all(times(vd,root,prev) ≤ 0 for root in roots for prev in prev_roots)  "All angles with previous roots should be acute."
     @assert all(is_root(vd,root) for root in roots) "All outputs of extend_root_stem must be roots"
