@@ -25,10 +25,10 @@ Launch julia:
 julia
 ```
 
-From julia, activate the environment (whatever that means):
+From julia, activate/instantiate the environment (whatever that means):
 
 ```julia
-using Pkg; Pkg.activate(".")
+using Pkg; Pkg.activate("."); Pkg.instantiate()
 ```
 
 This should install whatever is necessary.
