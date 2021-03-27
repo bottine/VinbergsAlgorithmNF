@@ -516,10 +516,16 @@ function _extend_root_stem(
 
 
         roots = Vector{Vector{NfAbsOrdElem}}()
-        interval_k_j = interval_for_k_j(constraints,j) # my intervals are still wrong!
+        # The idea is that interval_k_j gives an interval outside of which k_jα_j is not valid due to the constraints of acute angles given by previous roots.
+        # The code below SHOULD then use this interval to only iterate over k_js in this interval, but it has an error that I can't spot.
+        # The workaround for now is that I still iterate over all k_js, but filter on being in the interval: better than nothing I guess
+        interval_k_j = interval_for_k_j(constraints,j) 
         #(global_lb,global_ub) = interval_k_j
+        
+        # Since the code takes the enpoints of the interval to try to be clever (but does not work in doing so), we force the endpoints to be -∞,∞.
         (global_lb,global_ub) = (nothing,nothing) # Can't sem to make the interval work!
 
+        # The following three lines are not useful as long as the interval stuff does not work
         @assert α_j > 0
         !isnothing(global_lb) && (global_lb = global_lb//α_j.elem_in_nf)
         !isnothing(global_ub) && (global_ub = global_ub//α_j.elem_in_nf)
@@ -547,54 +553,38 @@ function _extend_root_stem(
                         new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
                         append!(roots,new)
                     end
-
                 end
-            end
 
+            end
         end
 
         for ordered in bounded_t2_candidates_vectors
             
             isempty(ordered) && continue
-            #lol#println("| "^(j-1), "looking at                :  ", ordered)
-            #lol#println("| "^(j-1), "global_lb                 :  ", global_lb)
-            #lol#println("| "^(j-1), "global_ub                 :  ", global_ub)
             
             # Not meaningful since I override global_lb and global_ub to nothing
             # Should eventually become more meaningful, if I manage to make the interval stuff work 
             lb = (global_lb === nothing ? -ordered[end] : global_lb)
-            ub = (global_ub === nothing ? ordered[end] : global_ub)
-            #lol#println("| "^(j-1), "       lb                 :  ", lb)
-            #lol#println("| "^(j-1), "       ub                 :  ", ub)
-            
+            ub = (global_ub === nothing ? ordered[end] : global_ub) 
             lb > ub && continue 
 
+            # For now this is the only case that happens
             if lb ≤ 0 && ub ≥ 0
 
-
+                # for now those two are always going to be length(ordered)
                 last_idx_lb = searchsortedlast(ordered,-lb)
                 last_idx_ub = searchsortedlast(ordered,ub)
-                #@warn "$last_idx_lb, $last_idx_ub"
-
-                #lol#println("| "^(j-1), "indices from one to       :  ", min(last_idx_ub, last_idx_lb))
 
                 for i in 1:min(last_idx_ub,last_idx_lb)
-                    #lol#println("| "^(j-1), "index                     :  ", i)
                     sk = ordered[i]
-                    #lol#println("| "^(j-1), "sk,                       :  ", sk)
-                    #lol#println("| "^(j-1), "crystal:                  :  ", crystal(sk))
-                    #lol#println("| "^(j-1), "good_norm                 :  ", good_norm(sk), ", ")
                     add_if_all_good(sk,pos=true,neg=true)
                 end
 
                 sign = last_idx_ub > last_idx_lb
                 for i in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
                     @assert false "useless for now since I override global_lb and global_ub to nothing"
-                    #lol#println("| "^(j-1), "indices from     to       :  ", min(last_idx_ub, last_idx_lb), ", ",  max(last_idx_ub, last_idx_lb) )
-                    #@warn "HELLO 00 ($(global_lb):$(global_ub)) and ($(ub |> approx),$(lb |> approx)) and $(last_idx_lb),$(last_idx_ub) ($sign)"
                     sk = ordered[i]
                     add_if_all_good(sk,pos=true,neg=true)
-                    #@assert false "To come when intervals work"
                 end
 
             elseif lb ≥ 0 && ub ≥ 0
@@ -613,14 +603,11 @@ function _extend_root_stem(
                     sk = ordered[i]
                     add_if_all_good(sk,pos=false,neg=true)
                 end
-                #@assert false "To come when intervals work"
             end
-            #lol#println("| "^(j-1), "---------------------------") 
 
         end
 
          
-        #lol#println("| "^(j-1), "roots are                 :  ", roots)
         return roots
 
     end
