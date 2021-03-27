@@ -509,7 +509,9 @@ function _extend_root_stem(
         #    ⇔  sk (two_α_over_ls) ∈ ring 
         crystal(sk) = sk * two_α_over_ls ∈ ring
 
-        integral(a_stem_can_rep) = true #all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
+        integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
+
+
 
 
         roots = Vector{Vector{NfAbsOrdElem}}()
@@ -517,6 +519,29 @@ function _extend_root_stem(
         
         stem_updated = copy(stem)
         stem_can_rep_updated = copy(stem_can_rep)
+
+        function add_if_all_good(sk,pos=true,neg=true)
+             
+            if crystal(sk) && good_norm(sk) # crystallographic condition and norm are OK
+
+                k = sk // s_j.elem_in_nf
+                if pos
+                    stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
+                    stem_can_rep_updated = stem_can_rep + k .* v_j
+                    if pos && integral(stem_can_rep_updated) 
+                        append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
+                    end
+                end
+                if neg && k≠0
+                    stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
+                    stem_can_rep_updated = stem_can_rep - k .* v_j
+                    if integral(stem_can_rep_updated) 
+                        append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
+                    end
+                end
+            end
+
+        end
 
         for ordered in bounded_t2_candidates_vectors
             
@@ -545,30 +570,13 @@ function _extend_root_stem(
                     #lol#println("| "^(j-1), "sk,                       :  ", sk)
                     #lol#println("| "^(j-1), "crystal:                  :  ", crystal(sk))
                     #lol#println("| "^(j-1), "good_norm                 :  ", good_norm(sk), ", ")
-                    if crystal(sk) && good_norm(sk)
-                        k = sk // s_j.elem_in_nf
-                        #lol#println("| "^(j-1), "k                         :  ", k)
-                        stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
-                        stem_can_rep_updated = stem_can_rep + k .* v_j
-                        if integral(stem_can_rep_updated) 
-                            append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
-                        end
-                        if k≠0
-                            stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
-                            stem_can_rep_updated = stem_can_rep - k .* v_j
-                            if integral(stem_can_rep_updated) 
-                                append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
-                            end
-                        end
-                    end
+                    add_if_all_good(sk,pos=true,neg=true)
                 end
 
-                sign = (last_idx_ub > last_idx_lb ? +1 : -1)
-                for idx in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
-                    @assert false "To come when intervals work"
-                    if integrality(sign*k)
-                        push!(good,sign*k)
-                    end
+                sign = last_idx_ub > last_idx_lb
+                for i in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
+                    sk = ordered[i]
+                    add_if_all_good(sk,pos=sign,neg=!sign)
                 end
 
             elseif lb ≥ 0 && ub ≥ 0
