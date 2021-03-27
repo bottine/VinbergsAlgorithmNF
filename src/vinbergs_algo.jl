@@ -427,7 +427,17 @@ function _extend_root_stem(
     α_j = vd.diagonal_values[j]
     v_j = vd.diagonal_basis[j]    
     s_j = vd.scaling[j]
-    l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) # S_j should be computed incrementally since S_{j+1} = S_j - stem[j+1]^2*diag_value[j+1] 
+    l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
+    
+    #α_over_s = α_j//s_j
+    α_over_s = vd.diago_over_scaling[j]
+    #α_over_s² = α//s_j^2
+    α_over_s² = vd.diago_over_scalingsq[j]
+    #two_α_over_ls = 2*α//(l*s_j)
+    two_α_over_ls = vd.two_diago_over_scaling_times_length[l][j]
+
+
+
 
     #lol#println("| "^(j-1), "j is                      :  ", j)
     #lol#println("| "^(j-1), "α_j is                    :  ", α_j)
@@ -483,16 +493,7 @@ function _extend_root_stem(
         #lol#println("| "^(j-1), "bounded t2 elems gives    :  ", bounded_t2_candidates_vectors)
         #lol#println("| "^(j-1), "---------------------------") 
         # does not work yet
-        #interval_k_j = interval_for_k_j(constraints,j)
        
-        #α_over_s = α_j//s_j
-        α_over_s = vd.diago_over_scaling[j]
-        #α_over_s² = α//s_j^2
-        α_over_s² = vd.diago_over_scalingsq[j]
-        #two_α_over_ls = 2*α//(l*s_j)
-        two_α_over_ls = vd.two_diago_over_scaling_times_length[l][j]
-
-
         #    Constraint on norm at al places:
         #
         #       k^2α ≤ l_j at all places
@@ -515,29 +516,42 @@ function _extend_root_stem(
 
 
         roots = Vector{Vector{NfAbsOrdElem}}()
-        (global_lb,global_ub) = (nothing,nothing)
+        interval_k_j = interval_for_k_j(constraints,j) # my intervals are still wrong!
+        #(global_lb,global_ub) = interval_k_j
+        (global_lb,global_ub) =  (nothing,nothing) 
         
         stem_updated = copy(stem)
         stem_can_rep_updated = copy(stem_can_rep)
 
-        function add_if_all_good(sk,pos=true,neg=true)
+        function add_if_all_good(sk;pos=true,neg=true)
              
             if crystal(sk) && good_norm(sk) # crystallographic condition and norm are OK
 
                 k = sk // s_j.elem_in_nf
                 if pos
+                    k_in_int = in_interval(k,interval_k_j)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
                     stem_can_rep_updated = stem_can_rep + k .* v_j
-                    if pos && integral(stem_can_rep_updated) 
-                        append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
+                    if integral(stem_can_rep_updated)
+                        new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
+                        append!(roots,new)
+                        if !k_in_int && !isempty(new)
+                            @info "$k didn't look good but was!"
+                        end
                     end
                 end
                 if neg && k≠0
+                    k_in_int = in_interval(-k,interval_k_j)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
                     stem_can_rep_updated = stem_can_rep - k .* v_j
                     if integral(stem_can_rep_updated) 
-                        append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
+                        new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
+                        append!(roots,new)
+                        if !k_in_int && !isempty(new)
+                            @info "-$k didn't look good but was!"
+                        end
                     end
+
                 end
             end
 
@@ -577,12 +591,25 @@ function _extend_root_stem(
                 for i in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
                     sk = ordered[i]
                     add_if_all_good(sk,pos=sign,neg=!sign)
+                    #@assert false "To come when intervals work"
                 end
 
             elseif lb ≥ 0 && ub ≥ 0
-                @assert false "To come when intervals work"
+                first_idx_lb = searchsortedfirst(ordered,lb)
+                last_idx_ub = searchsortedlast(ordered,ub)
+                for i in first_idx_lb:last_idx_ub
+                    sk = ordered[i]
+                    add_if_all_good(sk,pos=true,neg=false)
+                end
+                #@assert false "To come when intervals work"
             elseif lb ≤ 0 && lb ≤ 0
-                @assert false "To come when intervals work"
+                last_idx_lb = searchsortedlast(ordered,-lb)
+                first_idx_ub = searchsortedfirst(ordered,-ub)
+                for i in first_idx_ub:last_idx_lb 
+                    sk = ordered[i]
+                    add_if_all_good(sk,pos=false,neg=true)
+                end
+                #@assert false "To come when intervals work"
             end
             #lol#println("| "^(j-1), "---------------------------") 
 
@@ -609,7 +636,7 @@ function extend_root_stem(
     
     stem_norm_squared = norm_squared(vd,stem_can_rep)
     
-    j = 1
+    #lol#j = 1
     #lol#println("| "^(j-1))
     #lol#println("| "^(j-1), "---------------------------") 
     #lol#println("| "^(j-1), "extend_root_stem")
@@ -638,6 +665,7 @@ end
 function cone_roots(vd,roots_at_distance_zero)
 
     @warn "Cone roots computation are approximative ⇒ double check the results by hand."
+    @warn "If results look dubious, increasing LP precision by setting VinbergsAlgorithmNF.LP_PRECISION to something higher (currently $LP_PRECISION)"
     roots_at_distance_zero = [vd.field.(root) for root in roots_at_distance_zero]
     @info "starting with $(length(roots_at_distance_zero)) roots at distance zero"
     
