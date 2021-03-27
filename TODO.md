@@ -9,11 +9,14 @@
 * Reduce allocations needed in `update_constraints` and `_extend_root_stem`? 
 * Cone roots: One can fix an initial halfspace and only consider subsequent halfspaces when they have acute angle with the first one → should divide the time to find cone roots.
 * Check which of the conditions on stem extension are most useful and which are costly and order them accordingly.
+* Whenever possible, use the diagonal form to compute inner products
+* Profile and optimize whatever can be.
 
 # Quality
 
 * Unit tests everywhere
 * More examples to check good behaviour
+* More asserts
 * More non-diagonal lattices over bad fields
 * Implement Coxeter diagram isomorphism test
 
