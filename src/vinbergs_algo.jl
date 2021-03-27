@@ -517,12 +517,12 @@ function _extend_root_stem(
 
         roots = Vector{Vector{NfAbsOrdElem}}()
         interval_k_j = interval_for_k_j(constraints,j) # my intervals are still wrong!
-        (global_lb,global_ub) = interval_k_j
+        #(global_lb,global_ub) = interval_k_j
+        (global_lb,global_ub) = (nothing,nothing) # Can't sem to make the interval work!
 
         @assert α_j > 0
         !isnothing(global_lb) && (global_lb = global_lb//α_j.elem_in_nf)
         !isnothing(global_ub) && (global_ub = global_ub//α_j.elem_in_nf)
-        #(global_lb,global_ub) = (nothing,nothing)
 
         stem_updated = copy(stem)
         stem_can_rep_updated = copy(stem_can_rep)
@@ -532,7 +532,7 @@ function _extend_root_stem(
             if crystal(sk) && good_norm(sk) # crystallographic condition and norm are OK
 
                 k = sk // s_j.elem_in_nf
-                if pos
+                if pos && in_interval(k*α_j,interval_k_j)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
                     stem_can_rep_updated = stem_can_rep + k .* v_j
                     if integral(stem_can_rep_updated)
@@ -540,7 +540,7 @@ function _extend_root_stem(
                         append!(roots,new)
                     end
                 end
-                if neg && k≠0
+                if neg && k≠0 && in_interval(-k*α_j,interval_k_j)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
                     stem_can_rep_updated = stem_can_rep - k .* v_j
                     if integral(stem_can_rep_updated) 
@@ -560,20 +560,23 @@ function _extend_root_stem(
             #lol#println("| "^(j-1), "global_lb                 :  ", global_lb)
             #lol#println("| "^(j-1), "global_ub                 :  ", global_ub)
             
+            # Not meaningful since I override global_lb and global_ub to nothing
+            # Should eventually become more meaningful, if I manage to make the interval stuff work 
             lb = (global_lb === nothing ? -ordered[end] : global_lb)
             ub = (global_ub === nothing ? ordered[end] : global_ub)
-            #lol#println("| "^(j-1), "       lb                 :  ", global_lb)
-            #lol#println("| "^(j-1), "       ub                 :  ", global_ub)
+            #lol#println("| "^(j-1), "       lb                 :  ", lb)
+            #lol#println("| "^(j-1), "       ub                 :  ", ub)
             
             lb > ub && continue 
 
             if lb ≤ 0 && ub ≥ 0
 
+
                 last_idx_lb = searchsortedlast(ordered,-lb)
                 last_idx_ub = searchsortedlast(ordered,ub)
-                @warn "$last_idx_lb, $last_idx_ub"
+                #@warn "$last_idx_lb, $last_idx_ub"
 
-                #lol#println("| "^(j-1), "indices from to           :  ", last_idx_ub, "∧", last_idx_lb)
+                #lol#println("| "^(j-1), "indices from one to       :  ", min(last_idx_ub, last_idx_lb))
 
                 for i in 1:min(last_idx_ub,last_idx_lb)
                     #lol#println("| "^(j-1), "index                     :  ", i)
@@ -586,14 +589,16 @@ function _extend_root_stem(
 
                 sign = last_idx_ub > last_idx_lb
                 for i in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
-                    @warn "HELLO 00 ($(global_lb):$(global_ub)) and ($(ub |> approx),$(lb |> approx)) and $(last_idx_lb),$(last_idx_ub) ($sign)"
+                    @assert false "useless for now since I override global_lb and global_ub to nothing"
+                    #lol#println("| "^(j-1), "indices from     to       :  ", min(last_idx_ub, last_idx_lb), ", ",  max(last_idx_ub, last_idx_lb) )
+                    #@warn "HELLO 00 ($(global_lb):$(global_ub)) and ($(ub |> approx),$(lb |> approx)) and $(last_idx_lb),$(last_idx_ub) ($sign)"
                     sk = ordered[i]
-                    add_if_all_good(sk,pos=sign,neg=!sign)
+                    add_if_all_good(sk,pos=true,neg=true)
                     #@assert false "To come when intervals work"
                 end
 
             elseif lb ≥ 0 && ub ≥ 0
-                @warn "HELLO ++"
+                @assert false "useless for now since I override global_lb and global_ub to nothing"
                 first_idx_lb = searchsortedfirst(ordered,lb)
                 last_idx_ub = searchsortedlast(ordered,ub)
                 for i in 1:length(ordered) #first_idx_lb:last_idx_ub
@@ -601,7 +606,7 @@ function _extend_root_stem(
                     add_if_all_good(sk,pos=true,neg=false)
                 end
             elseif lb ≤ 0 && ub ≤ 0
-                @warn "HELLO --"
+                @assert false "useless for now since I override global_lb and global_ub to nothing"
                 first_idx_ub = searchsortedfirst(ordered,-ub)
                 last_idx_lb = searchsortedlast(ordered,-lb)
                 for i in 1:length(ordered)#first_idx_ub:last_idx_lb 
@@ -635,7 +640,7 @@ function extend_root_stem(
     
     stem_norm_squared = norm_squared(vd,stem_can_rep)
     
-    #lol#j = 1
+    j = 1
     #lol#println("| "^(j-1))
     #lol#println("| "^(j-1), "---------------------------") 
     #lol#println("| "^(j-1), "extend_root_stem")
