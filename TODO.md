@@ -1,0 +1,26 @@
+# Correctness
+
+* Make affine constraints work (current commit does not work)
+* Use `lb:ub` fully in enumeration of possible `k_j`.
+* Make cone root computation exact
+
+# Efficiency
+
+* Reduce allocations needed in `update_constraints` and `_extend_root_stem`? 
+* Cone roots: One can fix an initial halfspace and only consider subsequent halfspaces when they have acute angle with the first one → should divide the time to find cone roots.
+* Check which of the conditions on stem extension are most useful and which are costly and order them accordingly.
+
+# Quality
+
+* Unit tests everywhere
+* More examples to check good behaviour
+* More non-diagonal lattices over bad fields
+* Implement Coxeter diagram isomorphism test
+
+# Theory
+
+* Given roots at distance zero, can one algebraically find a set of cone roots?
+* Can one construct a set of cone roots without even being given the roots at distance zero?
+* If not, can one at least *check* that a set of cone roots is minimal?
+* Find proof of the condition that root lengths divide 2*last_invariant_factor?
+
