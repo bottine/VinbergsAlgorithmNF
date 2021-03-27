@@ -517,9 +517,13 @@ function _extend_root_stem(
 
         roots = Vector{Vector{NfAbsOrdElem}}()
         interval_k_j = interval_for_k_j(constraints,j) # my intervals are still wrong!
-        #(global_lb,global_ub) = interval_k_j
-        (global_lb,global_ub) =  (nothing,nothing) 
-        
+        (global_lb,global_ub) = interval_k_j
+
+        @assert α_j > 0
+        !isnothing(global_lb) && (global_lb = global_lb//α_j.elem_in_nf)
+        !isnothing(global_ub) && (global_ub = global_ub//α_j.elem_in_nf)
+        #(global_lb,global_ub) = (nothing,nothing)
+
         stem_updated = copy(stem)
         stem_can_rep_updated = copy(stem_can_rep)
 
@@ -529,27 +533,19 @@ function _extend_root_stem(
 
                 k = sk // s_j.elem_in_nf
                 if pos
-                    k_in_int = in_interval(k,interval_k_j)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
                     stem_can_rep_updated = stem_can_rep + k .* v_j
                     if integral(stem_can_rep_updated)
                         new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
                         append!(roots,new)
-                        if !k_in_int && !isempty(new)
-                            @info "$k didn't look good but was!"
-                        end
                     end
                 end
                 if neg && k≠0
-                    k_in_int = in_interval(-k,interval_k_j)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
                     stem_can_rep_updated = stem_can_rep - k .* v_j
                     if integral(stem_can_rep_updated) 
                         new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
                         append!(roots,new)
-                        if !k_in_int && !isempty(new)
-                            @info "-$k didn't look good but was!"
-                        end
                     end
 
                 end
@@ -575,6 +571,7 @@ function _extend_root_stem(
 
                 last_idx_lb = searchsortedlast(ordered,-lb)
                 last_idx_ub = searchsortedlast(ordered,ub)
+                @warn "$last_idx_lb, $last_idx_ub"
 
                 #lol#println("| "^(j-1), "indices from to           :  ", last_idx_ub, "∧", last_idx_lb)
 
@@ -589,23 +586,25 @@ function _extend_root_stem(
 
                 sign = last_idx_ub > last_idx_lb
                 for i in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
+                    @warn "HELLO 00 ($(global_lb):$(global_ub)) and ($(ub |> approx),$(lb |> approx)) and $(last_idx_lb),$(last_idx_ub) ($sign)"
                     sk = ordered[i]
                     add_if_all_good(sk,pos=sign,neg=!sign)
                     #@assert false "To come when intervals work"
                 end
 
             elseif lb ≥ 0 && ub ≥ 0
+                @warn "HELLO ++"
                 first_idx_lb = searchsortedfirst(ordered,lb)
                 last_idx_ub = searchsortedlast(ordered,ub)
-                for i in first_idx_lb:last_idx_ub
+                for i in 1:length(ordered) #first_idx_lb:last_idx_ub
                     sk = ordered[i]
                     add_if_all_good(sk,pos=true,neg=false)
                 end
-                #@assert false "To come when intervals work"
-            elseif lb ≤ 0 && lb ≤ 0
-                last_idx_lb = searchsortedlast(ordered,-lb)
+            elseif lb ≤ 0 && ub ≤ 0
+                @warn "HELLO --"
                 first_idx_ub = searchsortedfirst(ordered,-ub)
-                for i in first_idx_ub:last_idx_lb 
+                last_idx_lb = searchsortedlast(ordered,-lb)
+                for i in 1:length(ordered)#first_idx_ub:last_idx_lb 
                     sk = ordered[i]
                     add_if_all_good(sk,pos=false,neg=true)
                 end
