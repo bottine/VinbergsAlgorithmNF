@@ -33,3 +33,8 @@
 * Stop using `Hecke.QuadraticForm`s since we only actually use `inner_product()` which is probably easier to do by hand.
 * Allow running "short" and "long" tests independently (like they do in `Hecke.jl`): see https://github.com/JuliaLang/Pkg.jl/pull/1226
 * In the interval management part of `_extend_root_stem`, we have to take care of `α_j` everywhere because the constraints are given by the diagonalized versions of the previous roots and the constraints are given by the diagonal form: We should move the `α_j`s to the constraints to get something cleaner in `_extend_root_stem`
+* Look at all code and comments and clean stuff up (there are comments that are misleading or don't apply)* Clean up `_extend_root_stem` and unify its behaviour: 
+
+  * right now it does slightly different things when `j=dim` than when `j<dim`: this is normal but one could probably have a cleaner more unified approach
+  * Maybe remove the case `j=dim+1` and fold it in `j=dim`
+  * make `next_k_for_l` use the same "terminology" as `_extend_root_stem` since we have to check the same things in general.

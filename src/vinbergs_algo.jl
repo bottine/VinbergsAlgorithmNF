@@ -416,7 +416,7 @@ function _extend_root_stem(
         @toggled_assert all(bound ≥ 0 for bound in c_values) "All affine constraints given by previous roots must be satisfied."
 
         if is_integral(space, ring, stem_can_rep) && is_root(space,ring,field.(stem_can_rep),l) 
-            # this is partially redundant since the integralness should already hold?
+            # integralness should be guaranteed to hold for all but the last coordinate I think.
             return Vector{Vector{NfAbsOrdElem}}([copy(ring.(stem_can_rep))])
         else
             return Vector{Vector{NfAbsOrdElem}}()
