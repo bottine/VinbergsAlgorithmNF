@@ -32,3 +32,10 @@ include("some_known_lattices/sqrt2.jl")
 include("some_known_lattices/sqrt5.jl")
 include("some_known_lattices/sqrt13.jl")
 include("some_known_lattices/cos2piover7.jl")
+
+if "long" in ARGS
+    @info "long tests enabled"
+    
+else
+    @info "No long tests"
+end
