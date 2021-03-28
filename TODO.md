@@ -1,7 +1,5 @@
 # Correctness
 
-* Make affine constraints work (current commit does not work)
-* Use `lb:ub` fully in enumeration of possible `k_j`.
 * Make cone root computation exact
 
 # Efficiency
@@ -34,3 +32,4 @@
   Moreover, add lattice constructors for all irreducible spherical root systems, and add way to mix and match (like `lattice_playground.jl` in the old project)
 * Stop using `Hecke.QuadraticForm`s since we only actually use `inner_product()` which is probably easier to do by hand.
 * Allow running "short" and "long" tests independently (like they do in `Hecke.jl`)
+* In the interval management part of `_extend_root_stem`, we have to take care of `α_j` everywhere because the constraints are given by the diagonalized versions of the previous roots and the constraints are given by the diagonal form: We should move the `α_j`s to the constraints to get something cleaner in `_extend_root_stem`

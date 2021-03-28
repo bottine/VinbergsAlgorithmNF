@@ -512,23 +512,26 @@ function _extend_root_stem(
 
         integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
 
-
-
+        
+#        function nice(a,b)
+#            lb = isnothing(a) ? "-∞" :  string(round(Float64(VA.approx(a)),digits=1))
+#            ub = isnothing(a) ? "+∞" :  string(round(Float64(VA.approx(a)),digits=1))
+#            return "[" * lb * " , " * ub * "]"
+#        end
 
         roots = Vector{Vector{NfAbsOrdElem}}()
+        
         # The idea is that interval_k_j gives an interval outside of which k_jα_j is not valid due to the constraints of acute angles given by previous roots.
-        # The code below SHOULD then use this interval to only iterate over k_js in this interval, but it has an error that I can't spot.
-        # The workaround for now is that I still iterate over all k_js, but filter on being in the interval: better than nothing I guess
-        interval_k_j = interval_for_k_j(constraints,j) 
+        # The code below SHOULD then use this interval to only iterate over k_js in this interval.
+        interval_αk = interval_for_k_j(constraints,j) 
         #(global_lb,global_ub) = interval_k_j
         
-        # Since the code takes the enpoints of the interval to try to be clever (but does not work in doing so), we force the endpoints to be -∞,∞.
-        (global_lb,global_ub) = (nothing,nothing) # Can't sem to make the interval work!
 
-        # The following three lines are not useful as long as the interval stuff does not work
+        # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
         @assert α_j > 0
-        !isnothing(global_lb) && (global_lb = global_lb//α_j.elem_in_nf)
-        !isnothing(global_ub) && (global_ub = global_ub//α_j.elem_in_nf)
+        (global_lb_for_sk,global_ub_for_sk) = interval_αk 
+        global_lb_for_sk  = ( isnothing(interval_αk[1]) ? nothing : interval_αk[1]//α_over_s )
+        global_ub_for_sk  = ( isnothing(interval_αk[2]) ? nothing : interval_αk[2]//α_over_s )
 
         stem_updated = copy(stem)
         stem_can_rep_updated = copy(stem_can_rep)
@@ -538,7 +541,8 @@ function _extend_root_stem(
             if crystal(sk) && good_norm(sk) # crystallographic condition and norm are OK
 
                 k = sk // s_j.elem_in_nf
-                if pos && in_interval(k*α_j,interval_k_j)
+                if pos 
+                    @toggled_assert in_interval(k*α_j,interval_αk)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
                     stem_can_rep_updated = stem_can_rep + k .* v_j
                     if integral(stem_can_rep_updated)
@@ -546,7 +550,8 @@ function _extend_root_stem(
                         append!(roots,new)
                     end
                 end
-                if neg && k≠0 && in_interval(-k*α_j,interval_k_j)
+                if neg && k≠0 
+                    @toggled_assert in_interval(-k*α_j,interval_αk)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
                     stem_can_rep_updated = stem_can_rep - k .* v_j
                     if integral(stem_can_rep_updated) 
@@ -559,50 +564,47 @@ function _extend_root_stem(
         end
 
         for ordered in bounded_t2_candidates_vectors
-            
+           
+            @toggled_assert issorted(ordered)
             isempty(ordered) && continue
             
-            # Not meaningful since I override global_lb and global_ub to nothing
-            # Should eventually become more meaningful, if I manage to make the interval stuff work 
-            lb = (global_lb === nothing ? -ordered[end] : global_lb)
-            ub = (global_ub === nothing ? ordered[end] : global_ub) 
+            # since `nothing` is not comparable to nf_elem (easily) we just replace it by a safe value here.
+            lb = (global_lb_for_sk === nothing ? -ordered[end] : global_lb_for_sk)
+            ub = (global_ub_for_sk === nothing ? ordered[end] : global_ub_for_sk) 
             lb > ub && continue 
 
-            # For now this is the only case that happens
             if lb ≤ 0 && ub ≥ 0
 
-                # for now those two are always going to be length(ordered)
                 last_idx_lb = searchsortedlast(ordered,-lb)
                 last_idx_ub = searchsortedlast(ordered,ub)
-
-                for i in 1:min(last_idx_ub,last_idx_lb)
-                    sk = ordered[i]
+                
+                for sk in ordered[1:min(last_idx_ub,last_idx_lb)]
                     add_if_all_good(sk,pos=true,neg=true)
                 end
 
                 sign = last_idx_ub > last_idx_lb
-                for i in min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)
-                    @assert false "useless for now since I override global_lb and global_ub to nothing"
-                    sk = ordered[i]
-                    add_if_all_good(sk,pos=true,neg=true)
+                for sk in ordered[min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)]
+                    add_if_all_good(sk,pos=sign,neg=!sign)
                 end
 
             elseif lb ≥ 0 && ub ≥ 0
-                @assert false "useless for now since I override global_lb and global_ub to nothing"
+                
                 first_idx_lb = searchsortedfirst(ordered,lb)
                 last_idx_ub = searchsortedlast(ordered,ub)
-                for i in 1:length(ordered) #first_idx_lb:last_idx_ub
-                    sk = ordered[i]
+                
+                for sk in ordered[first_idx_lb:last_idx_ub]
                     add_if_all_good(sk,pos=true,neg=false)
                 end
+
             elseif lb ≤ 0 && ub ≤ 0
-                @assert false "useless for now since I override global_lb and global_ub to nothing"
+                
                 first_idx_ub = searchsortedfirst(ordered,-ub)
                 last_idx_lb = searchsortedlast(ordered,-lb)
-                for i in 1:length(ordered)#first_idx_ub:last_idx_lb 
-                    sk = ordered[i]
+                
+                for sk in ordered[first_idx_ub:last_idx_lb] 
                     add_if_all_good(sk,pos=false,neg=true)
                 end
+
             end
 
         end
