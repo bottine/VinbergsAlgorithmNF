@@ -533,6 +533,9 @@ function _extend_root_stem(
         global_lb_for_sk  = ( isnothing(interval_αk[1]) ? nothing : interval_αk[1]//α_over_s )
         global_ub_for_sk  = ( isnothing(interval_αk[2]) ? nothing : interval_αk[2]//α_over_s )
 
+        # IF interval management seems to be at fault, do
+        # (global_lb_for_sk,global_ub_for_sk) = (nothing,nothing)
+
         stem_updated = copy(stem)
         stem_can_rep_updated = copy(stem_can_rep)
 

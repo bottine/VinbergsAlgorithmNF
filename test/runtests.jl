@@ -27,8 +27,8 @@ function compare_vinberg_outputs(K,matrix,known_roots)
 end
 
 
-include("test_known_rational_lattices.jl")
-include("test_known_sqrt2_lattices.jl")
-include("test_known_sqrt5_lattices.jl")
-include("test_known_sqrt13_lattices.jl")
-include("test_known_cos2piover7_lattices.jl")
+include("some_known_lattices/rational.jl")
+include("some_known_lattices/sqrt2.jl")
+include("some_known_lattices/sqrt5.jl")
+include("some_known_lattices/sqrt13.jl")
+include("some_known_lattices/cos2piover7.jl")
