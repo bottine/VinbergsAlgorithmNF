@@ -16,7 +16,6 @@
 * More examples to check good behaviour
 * More asserts
 * More non-diagonal lattices over bad fields
-* Implement Coxeter diagram isomorphism test
 
 # Theory
 

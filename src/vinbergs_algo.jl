@@ -764,10 +764,8 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
         t2_cache = BoundedT2ElemsCache(vd.ring) 
     end
     
-
-    # TODO: make this work even when the previous roots are not cone roots.
-    # In this case, one just need to iterate over the pairs (k,l) in the dictionary until we're at distance ≥ than the farthest root in prev_roots
-    @assert all(fake_dist_to_basepoint(vd,r) == 0 for r in prev_roots) "Only works with previous roots == cone roots"
+    # TODO
+    # asserts that the previous roots are closer than what the dict proposes, otherwise we'll get inconsistencies
 
 
     roots = prev_roots
