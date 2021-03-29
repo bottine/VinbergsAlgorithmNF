@@ -36,6 +36,7 @@ include("some_known_lattices/cos2piover7.jl")
 
 if "long" in ARGS
     @info "long tests enabled"
+    include("some_known_lattices/bianchi.jl")
     
 else
     @info "No long tests"
