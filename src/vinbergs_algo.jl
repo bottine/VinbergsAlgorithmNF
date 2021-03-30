@@ -529,9 +529,11 @@ function _extend_root_stem(
 
         # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
         @assert α_j > 0
-        (global_lb_for_sk,global_ub_for_sk) = interval_αk 
-        global_lb_for_sk  = ( isnothing(interval_αk[1]) ? nothing : interval_αk[1]//α_over_s )
-        global_ub_for_sk  = ( isnothing(interval_αk[2]) ? nothing : interval_αk[2]//α_over_s )
+        (global_lb_for_sk,global_ub_for_sk) = interval_αk
+        no_lb = isnothing(interval_αk[1])
+        no_ub = isnothing(interval_αk[2])
+        global_lb_for_sk  = ( no_lb ? nothing : interval_αk[1]//α_over_s )
+        global_ub_for_sk  = ( no_ub ? nothing : interval_αk[2]//α_over_s )
 
         # IF interval management seems to be at fault, do
         # (global_lb_for_sk,global_ub_for_sk) = (nothing,nothing)
@@ -572,14 +574,16 @@ function _extend_root_stem(
             isempty(ordered) && continue
             
             # since `nothing` is not comparable to nf_elem (easily) we just replace it by a safe value here.
-            lb = (global_lb_for_sk === nothing ? -ordered[end] : global_lb_for_sk)
-            ub = (global_ub_for_sk === nothing ? ordered[end] : global_ub_for_sk) 
+            lb = (no_lb ? -ordered[end] : global_lb_for_sk)
+            ub = (no_ub ? ordered[end] : global_ub_for_sk) 
             lb > ub && continue 
 
             if lb ≤ 0 && ub ≥ 0
 
-                last_idx_lb = searchsortedlast(ordered,-lb)
-                last_idx_ub = searchsortedlast(ordered,ub)
+                #last_idx_lb = searchsortedlast(ordered,-lb)
+                last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,-global_lb_for_sk))
+                #last_idx_ub = searchsortedlast(ordered,ub)
+                last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,global_ub_for_sk))
                 
                 for sk in ordered[1:min(last_idx_ub,last_idx_lb)]
                     add_if_all_good(sk,pos=true,neg=true)
@@ -592,8 +596,10 @@ function _extend_root_stem(
 
             elseif lb ≥ 0 && ub ≥ 0
                 
-                first_idx_lb = searchsortedfirst(ordered,lb)
-                last_idx_ub = searchsortedlast(ordered,ub)
+                #first_idx_lb = searchsortedfirst(ordered,lb)
+                first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,global_lb_for_sk))
+                #last_idx_ub = searchsortedlast(ordered,ub)
+                last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,global_ub_for_sk))
                 
                 for sk in ordered[first_idx_lb:last_idx_ub]
                     add_if_all_good(sk,pos=true,neg=false)
@@ -601,9 +607,11 @@ function _extend_root_stem(
 
             elseif lb ≤ 0 && ub ≤ 0
                 
-                first_idx_ub = searchsortedfirst(ordered,-ub)
-                last_idx_lb = searchsortedlast(ordered,-lb)
-                
+                #first_idx_ub = searchsortedfirst(ordered,-ub)
+                first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,-global_ub_for_sk))
+                #last_idx_lb = searchsortedlast(ordered,-lb)
+                last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,-global_lb_for_sk))
+
                 for sk in ordered[first_idx_ub:last_idx_lb] 
                     add_if_all_good(sk,pos=false,neg=true)
                 end
