@@ -533,6 +533,9 @@ function _extend_root_stem(
         no_ub = isnothing(interval_αk[2])
         lb_for_sk  = ( no_lb ? field(0) : interval_αk[1]//α_over_s )
         ub_for_sk  = ( no_ub ? field(0) : interval_αk[2]//α_over_s )
+        if !no_lb && !no_ub && lb_for_sk > ub_for_sk
+            return roots
+        end
 
         #if global_lb_for_sk > global_ub_for_sk 
         #    return roots
