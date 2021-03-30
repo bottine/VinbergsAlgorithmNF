@@ -27,13 +27,13 @@ function compare_vinberg_outputs(K,matrix,known_roots)
     @test CoxeterDiagrams.is_isom(VA.Coxeter_matrix(vd,roots_found),VA.Coxeter_matrix(vd,known_roots))
 end
 
-
-include("some_known_lattices/rational.jl")
-include("some_known_lattices/sqrt2.jl")
-include("some_known_lattices/sqrt5.jl")
-include("some_known_lattices/sqrt13.jl")
-include("some_known_lattices/cos2piover7.jl")
-
+@testset "Known lattices" begin
+    include("some_known_lattices/rational.jl")
+    include("some_known_lattices/sqrt2.jl")
+    include("some_known_lattices/sqrt5.jl")
+    include("some_known_lattices/sqrt13.jl")
+    include("some_known_lattices/cos2piover7.jl")
+end
 if "long" in ARGS
     @info "long tests enabled"
     include("some_known_lattices/bianchi.jl")
