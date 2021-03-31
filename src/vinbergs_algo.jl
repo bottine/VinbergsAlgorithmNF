@@ -346,6 +346,10 @@ function interval_for_k_j(ac::AffineConstraints,j::Int)::Tuple{Union{Nothing,nf_
     return (isempty(neg) ? nothing : maximum(neg), isempty(pos) ? nothing : minimum(pos))
 end
 
+function is_empty_interval(i::Tuple{Union{Nothing,nf_elem},Union{Nothing,nf_elem}})
+    !isnothing(i[1]) && !isnothing(i[2]) && i[1] > i[2]
+end
+
 function in_interval(
     k,
     interval::Tuple{Union{Nothing,nf_elem},Union{Nothing,nf_elem}}
@@ -622,16 +626,12 @@ function _extend_root_stem(
 
     # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
     @assert α_j > 0
-    no_lb = isnothing(interval_αk[1])
-    no_ub = isnothing(interval_αk[2])
-    if !no_lb && !no_ub && interval_αk[1] > interval_αk[2]
+    if is_empty_interval(interval_αk)
         return roots
     end
-
+    
     stem_updated = copy(stem)
     stem_can_rep_updated = copy(stem_can_rep)
-
-    
     for (idx,ordered) in enumerate(t2_cache.elems[1:last_bounded_t2_candidates_vector_idx])
        
         @toggled_assert issorted(ordered)
@@ -675,21 +675,6 @@ function extend_root_stem(
     
     stem_norm_squared = norm_squared(vd,stem_can_rep)
     
-    j = 1
-    #lol#println("| "^(j-1))
-    #lol#println("| "^(j-1), "---------------------------") 
-    #lol#println("| "^(j-1), "extend_root_stem")
-    #lol#println("| "^(j-1), "stem_diag_rep             :  ", stem_diag_rep)
-    #lol#println("| "^(j-1), "of length                 :  ", stem_length)
-    #lol#println("| "^(j-1), "stem_can_rep              :  ", stem_can_rep)
-    #lol#println("| "^(j-1), "root length               :  ", root_length)
-    #lol#println("| "^(j-1), "root length_minu_partial  :  ", root_length - stem_norm_squared)
-    #lol#println("| "^(j-1), "constraints               :  ", constraints)
-    #lol#println("| "^(j-1), "---------------------------") 
-
-
-
-    #@info "roots_for_pair($pair,$prev_roots)"
     return  _extend_root_stem(vd,stem_diag_rep,stem_can_rep,stem_length,vd.field.(root_length),vd.field.(root_length-stem_norm_squared),constraints,t2_cache)
 end
 
