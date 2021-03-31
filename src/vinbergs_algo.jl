@@ -506,8 +506,8 @@ end
 )
     if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
 
-        last_idx_pos = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
-        last_idx_neg = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
+        last_idx_neg = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
+        last_idx_pos = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
         return (1,last_idx_pos,1,last_idx_neg)
 
     elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
@@ -658,21 +658,23 @@ function _extend_root_stem(
         @toggled_assert issorted(ordered)
         isempty(ordered) && continue
         
-        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(no_ub, ub_for_sk, no_lb, lb_for_sk) 
+        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(no_ub, ub_for_sk, no_lb, lb_for_sk, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            pos = first_idx_pos ≤ i && last_idx_pos ≥ i
+            sk,t2sk = ordered[i]
+            pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
-        _add_if_all_good!(
-            vd,
-            sk,t2sk,
-            t2_bound_for_sk,
-            l,l_j,j,
-            stem,stem_updated,stem_can_rep,stem_can_rep_updated,
-            constraints,roots,interval_αk,t2_cache;pos=pos,neg=neg
-        )
 
+            _add_if_all_good!(
+                vd,
+                sk,t2sk,
+                t2_bound_for_sk,
+                l,l_j,j,
+                stem,stem_updated,stem_can_rep,stem_can_rep_updated,
+                constraints,roots,interval_αk,t2_cache;pos=pos,neg=neg
+            )
+        end
     end
 
      
