@@ -371,6 +371,7 @@ end
     space = vd.quad_space
     P = infinite_places(field)
     l = root_length   
+    (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
 
     @toggled_assert stem_can_rep == to_can_rep(vd,stem) "Sanity check. `stem_can_rep` must always be equal to `to_can_rep(vd,stem)`!"
     @toggled_assert times(vd,stem_can_rep,stem_can_rep) == l "Sanity check. If we are here, by the previous case (j==vd.dim) necessarily we have the right length."
@@ -500,10 +501,17 @@ end
 end
 
 @inline function find_range(
-    no_ub,ub,
-    no_lb,lb,
+    field,
+    interval_αk,
+    α_over_s,
     ordered
 )
+    
+    no_lb = isnothing(interval_αk[1])
+    no_ub = isnothing(interval_αk[2])
+    lb  = ( no_lb ? field(35) : interval_αk[1]//α_over_s ) # 35 and -14 chosen at random because they don't matter!
+    ub  = ( no_ub ? field(-14) : interval_αk[2]//α_over_s )
+    
     if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
 
         last_idx_neg = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
@@ -616,9 +624,7 @@ function _extend_root_stem(
     @assert α_j > 0
     no_lb = isnothing(interval_αk[1])
     no_ub = isnothing(interval_αk[2])
-    lb_for_sk  = ( no_lb ? field(35) : interval_αk[1]//α_over_s ) # 35 and -14 chosen at random because they don't matter!
-    ub_for_sk  = ( no_ub ? field(-14) : interval_αk[2]//α_over_s )
-    if !no_lb && !no_ub && lb_for_sk > ub_for_sk
+    if !no_lb && !no_ub && interval_αk[1] > interval_αk[2]
         return roots
     end
 
@@ -631,7 +637,7 @@ function _extend_root_stem(
         @toggled_assert issorted(ordered)
         isempty(ordered) && continue
         
-        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(no_ub, ub_for_sk, no_lb, lb_for_sk, ordered) 
+        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
             sk,t2sk = ordered[i]
