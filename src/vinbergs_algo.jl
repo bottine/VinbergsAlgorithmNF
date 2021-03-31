@@ -453,7 +453,7 @@ end
    
 end
 
-@inline function _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true)
+@inline function _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true,check_t2=true)
 
     ring = vd.ring
     field = vd.field
@@ -471,7 +471,7 @@ end
     two_α_over_ls = vd.two_diago_over_scaling_times_length[ring(l)][j]
 
 
-    if Float64(t2sk) ≤ t2_bound &&
+    if (check_t2 ⇒ (Float64(t2sk) ≤ t2_bound)) &&
         sk * two_α_over_ls ∈ ring && # crystallographic condition 
         all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
 
@@ -542,20 +542,7 @@ function _extend_root_stem(
     
     j = stem_length + 1 
     
-    #lol#println("| "^(j-1))
-    #lol#println("| "^(j-1), "---------------------------") 
-    #lol#println("| "^(j-1), "_extend_root_stem")
-    #lol#println("| "^(j-1), "stem                      :  ", stem)
-    #lol#println("| "^(j-1), "of length                 :  ", stem_length)
-    #lol#println("| "^(j-1), "stem_can_rep              :  ", stem_can_rep)
-    #lol#println("| "^(j-1), "root length               :  ", root_length)
-    #lol#println("| "^(j-1), "root length_minu_partial  :  ", root_length_minus_stem_norm_squared)
-    #lol#println("| "^(j-1), "constraints               :  ", constraints)
-    #lol#println("| "^(j-1), "---------------------------") 
-
-     
     if clearly_inconsistent(constraints,j,vd.dim)
-        #lol#println("| "^(j-1), "out of bounds")
         return Vector{Vector{nf_elem}}()
     end
     
@@ -574,10 +561,6 @@ function _extend_root_stem(
     P = infinite_places(field)
     l = root_length
     (c_vectors,c_values,c_last_non_zero_coordinates) = constraints
-
-
-
-
 
     α_j = vd.diagonal_values[j]
     v_j = vd.diagonal_basis[j]    
@@ -602,9 +585,6 @@ function _extend_root_stem(
         t2_cache
     )
     
-    #lol#println("| "^(j-1), "bounded t2 elems gives    :  ", bounded_t2_candidates_vectors)
-    #lol#println("| "^(j-1), "---------------------------") 
-    # does not work yet
    
     #    Constraint on norm at al places:
     #
@@ -625,18 +605,11 @@ function _extend_root_stem(
     #integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
 
     
-#        function nice(a,b)
-#            lb = isnothing(a) ? "-∞" :  string(round(Float64(VA.approx(a)),digits=1))
-#            ub = isnothing(a) ? "+∞" :  string(round(Float64(VA.approx(a)),digits=1))
-#            return "[" * lb * " , " * ub * "]"
-#        end
-
     roots = Vector{Vector{nf_elem}}()
     
     # The idea is that interval_k_j gives an interval outside of which k_jα_j is not valid due to the constraints of acute angles given by previous roots.
     # The code below SHOULD then use this interval to only iterate over k_js in this interval.
     interval_αk = interval_for_k_j(constraints,j) 
-    #(global_lb,global_ub) = interval_k_j
     
 
     # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
@@ -653,7 +626,7 @@ function _extend_root_stem(
     stem_can_rep_updated = copy(stem_can_rep)
 
     
-    for ordered in t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]
+    for (idx,ordered) in enumerate(t2_cache.elems[1:last_bounded_t2_candidates_vector_idx])
        
         @toggled_assert issorted(ordered)
         isempty(ordered) && continue
@@ -672,7 +645,7 @@ function _extend_root_stem(
                 t2_bound_for_sk,
                 l,l_j,j,
                 stem,stem_updated,stem_can_rep,stem_can_rep_updated,
-                constraints,roots,interval_αk,t2_cache;pos=pos,neg=neg
+                constraints,roots,interval_αk,t2_cache;pos=pos,neg=neg,check_t2=(idx==last_bounded_t2_candidates_vector_idx)
             )
         end
     end
