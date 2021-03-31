@@ -499,6 +499,35 @@ end
 
 end
 
+@inline function find_range(
+    no_ub,ub,
+    no_lb,lb,
+    ordered
+)
+    if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
+
+        last_idx_pos = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
+        last_idx_neg = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
+        return (1,last_idx_pos,1,last_idx_neg)
+
+    elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
+        
+        first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb,:dummy),by=(x->x[1])))
+        last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
+        return (first_idx_lb,last_idx_ub,1,0)
+
+
+    elseif (no_lb || lb ≤ 0) && (!no_ub && ub ≤ 0)
+        
+        first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub,:dummy),by=(x->x[1])))
+        last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
+        return (1,0,first_idx_ub,last_idx_lb)
+    end
+    
+    @assert false "should not be reachable"
+
+end
+
 function _extend_root_stem(
     vd::VinbergData,
     stem::Vector{nf_elem},
@@ -565,11 +594,11 @@ function _extend_root_stem(
 
   
     
-    t2_bound = approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1
+    t2_bound_for_sk = approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1
     last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
         vd.field,
         vd.ring, 
-        t2_bound,
+        t2_bound_for_sk,
         t2_cache
     )
     
@@ -614,17 +643,11 @@ function _extend_root_stem(
     @assert α_j > 0
     no_lb = isnothing(interval_αk[1])
     no_ub = isnothing(interval_αk[2])
-    lb_for_sk  = ( no_lb ? field(0) : interval_αk[1]//α_over_s )
-    ub_for_sk  = ( no_ub ? field(0) : interval_αk[2]//α_over_s )
+    lb_for_sk  = ( no_lb ? field(35) : interval_αk[1]//α_over_s ) # 35 and -14 chosen at random because they don't matter!
+    ub_for_sk  = ( no_ub ? field(-14) : interval_αk[2]//α_over_s )
     if !no_lb && !no_ub && lb_for_sk > ub_for_sk
         return roots
     end
-
-    #if global_lb_for_sk > global_ub_for_sk 
-    #    return roots
-    #end
-    # IF interval management seems to be at fault, do
-    # (global_lb_for_sk,global_ub_for_sk) = (nothing,nothing)
 
     stem_updated = copy(stem)
     stem_can_rep_updated = copy(stem_can_rep)
@@ -635,46 +658,20 @@ function _extend_root_stem(
         @toggled_assert issorted(ordered)
         isempty(ordered) && continue
         
-
-        if (no_lb || lb_for_sk ≤ 0) && (no_ub || ub_for_sk ≥ 0) 
-
-            #last_idx_lb = searchsortedlast(ordered,-lb)
-            last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb_for_sk,:dummy),by=(x->x[1])))
-            #last_idx_ub = searchsortedlast(ordered,ub)
-            last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub_for_sk,:dummy),by=(x->x[1])))
+        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(no_ub, ub_for_sk, no_lb, lb_for_sk) 
+        for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            for (sk,t2sk) in ordered[1:min(last_idx_ub,last_idx_lb)]
-                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true)
-            end
+            pos = first_idx_pos ≤ i && last_idx_pos ≥ i
+            neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
-            sign = last_idx_ub > last_idx_lb
-            for (sk,t2sk) in ordered[min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)]
-                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=sign,neg=!sign)
-            end
-
-        elseif (!no_lb && lb_for_sk ≥ 0) && (no_ub || ub_for_sk ≥ 0)
-            
-            #first_idx_lb = searchsortedfirst(ordered,lb)
-            first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb_for_sk,:dummy),by=(x->x[1])))
-            #last_idx_ub = searchsortedlast(ordered,ub)
-            last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub_for_sk,:dummy),by=(x->x[1])))
-            
-            for (sk,t2sk) in ordered[first_idx_lb:last_idx_ub]
-                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=false)
-            end
-
-        elseif (no_lb || lb_for_sk ≤ 0) && (!no_ub && ub_for_sk ≤ 0)
-            
-            #first_idx_ub = searchsortedfirst(ordered,-ub)
-            first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub_for_sk,:dummy),by=(x->x[1])))
-            #last_idx_lb = searchsortedlast(ordered,-lb)
-            last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb_for_sk,:dummy),by=(x->x[1])))
-
-            for (sk,t2sk) in ordered[first_idx_ub:last_idx_lb] 
-                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=false,neg=true)
-            end
-
-        end
+        _add_if_all_good!(
+            vd,
+            sk,t2sk,
+            t2_bound_for_sk,
+            l,l_j,j,
+            stem,stem_updated,stem_can_rep,stem_can_rep_updated,
+            constraints,roots,interval_αk,t2_cache;pos=pos,neg=neg
+        )
 
     end
 
@@ -835,7 +832,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
 
     roots = prev_roots
     #Coxeter_matrix = get_Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
-    new_roots = []
+    new_roots = Vector{Vector{nf_elem}}()
     while n > 0 
 
 
