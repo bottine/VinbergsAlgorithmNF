@@ -355,36 +355,6 @@ function in_interval(
 end
 
 
-@inline function _add_if_all_good!(vd,sk,t2sk,t2_bound,two_α_over_ls,α_over_s²,s_j,v_j,l,l_j,P,ring,field,α_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true)
-
-    if Float64(t2sk) ≤ t2_bound &&
-        sk * two_α_over_ls ∈ ring && # crystallographic condition 
-        all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
-
-        k = sk // s_j.elem_in_nf
-        if pos 
-            @toggled_assert in_interval(k*α_j,interval_αk)
-            stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
-            stem_can_rep_updated = stem_can_rep + k .* v_j
-            if all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
-                append!(roots,new)
-            end
-        end
-        if neg && k≠0 
-            @toggled_assert in_interval(-k*α_j,interval_αk)
-            stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
-            stem_can_rep_updated = stem_can_rep - k .* v_j
-            if all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
-                append!(roots,new)
-            end
-        end
-
-    end
-
-end
-
 @inline function _extend_root_stem_full(
     vd::VinbergData,
     stem::Vector{nf_elem},
@@ -483,6 +453,52 @@ end
    
 end
 
+@inline function _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true)
+
+    ring = vd.ring
+    field = vd.field
+    P = infinite_places(field)
+
+    α_j = vd.diagonal_values[j]
+    v_j = vd.diagonal_basis[j]    
+    s_j = vd.scaling[j]
+    
+    #α_over_s = α_j//s_j
+    α_over_s = vd.diago_over_scaling[j]
+    #α_over_s² = α//s_j^2
+    α_over_s² = vd.diago_over_scalingsq[j]
+    #two_α_over_ls = 2*α//(l*s_j)
+    two_α_over_ls = vd.two_diago_over_scaling_times_length[ring(l)][j]
+
+
+    if Float64(t2sk) ≤ t2_bound &&
+        sk * two_α_over_ls ∈ ring && # crystallographic condition 
+        all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
+
+        k = sk // s_j.elem_in_nf
+        if pos 
+            @toggled_assert in_interval(k*α_j,interval_αk)
+            stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
+            stem_can_rep_updated = stem_can_rep + k .* v_j
+            if all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
+                new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
+                append!(roots,new)
+            end
+        end
+        if neg && k≠0 
+            @toggled_assert in_interval(-k*α_j,interval_αk)
+            stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
+            stem_can_rep_updated = stem_can_rep - k .* v_j
+            if all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
+                new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
+                append!(roots,new)
+            end
+        end
+
+    end
+
+end
+
 function _extend_root_stem(
     vd::VinbergData,
     stem::Vector{nf_elem},
@@ -515,6 +531,14 @@ function _extend_root_stem(
     end
     
 
+    if j == vd.dim + 1
+        return _extend_root_stem_full(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
+    end
+
+    if j == vd.dim
+        return _extend_root_stem_one_coord_left(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
+    end
+
     field = vd.field
     ring = vd.ring
     space = vd.quad_space
@@ -525,158 +549,139 @@ function _extend_root_stem(
 
 
 
-    if j == vd.dim + 1
-        return _extend_root_stem_full(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
-    end
+
+    α_j = vd.diagonal_values[j]
+    v_j = vd.diagonal_basis[j]    
+    s_j = vd.scaling[j]
+    l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
+    
+    #α_over_s = α_j//s_j
+    α_over_s = vd.diago_over_scaling[j]
+    #α_over_s² = α//s_j^2
+    α_over_s² = vd.diago_over_scalingsq[j]
+    #two_α_over_ls = 2*α//(l*s_j)
+    two_α_over_ls = vd.two_diago_over_scaling_times_length[vd.ring(l)][j]
 
 
-
-    #lol#println("| "^(j-1), "j is                      :  ", j)
-    #lol#println("| "^(j-1), "α_j is                    :  ", α_j)
-    #lol#println("| "^(j-1), "v_j is                    :  ", v_j)
-    #lol#println("| "^(j-1), "s_j is                    :  ", s_j)
-    #lol#println("| "^(j-1), "l_j is                    :  ", l_j)
+  
+    
+    t2_bound = approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1
+    last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
+        vd.field,
+        vd.ring, 
+        t2_bound,
+        t2_cache
+    )
+    
+    #lol#println("| "^(j-1), "bounded t2 elems gives    :  ", bounded_t2_candidates_vectors)
     #lol#println("| "^(j-1), "---------------------------") 
+    # does not work yet
+   
+    #    Constraint on norm at al places:
+    #
+    #       k^2α ≤ l_j at all places
+    #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
+    #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
+    #
+    #good_norm(sk) = all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
+
+    #    Constraint as given by the crystallographic condition:
+    #
+    #       l | 2kα  
+    #    ⇔  2kα/l ∈ ring  
+    #    ⇔  sk (2α//ls) ∈ ring 
+    #    ⇔  sk (two_α_over_ls) ∈ ring 
+    #crystal(sk) = sk * two_α_over_ls ∈ ring
+
+    #integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
+
     
-    if j == vd.dim
-      
-        return _extend_root_stem_one_coord_left(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
-
-    else
-    
-        α_j = vd.diagonal_values[j]
-        v_j = vd.diagonal_basis[j]    
-        s_j = vd.scaling[j]
-        l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
-        
-        #α_over_s = α_j//s_j
-        α_over_s = vd.diago_over_scaling[j]
-        #α_over_s² = α//s_j^2
-        α_over_s² = vd.diago_over_scalingsq[j]
-        #two_α_over_ls = 2*α//(l*s_j)
-        two_α_over_ls = vd.two_diago_over_scaling_times_length[vd.ring(l)][j]
-
-
-      
-        
-        t2_bound = approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1
-        last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
-            vd.field,
-            vd.ring, 
-            t2_bound,
-            t2_cache
-        )
-        
-        #lol#println("| "^(j-1), "bounded t2 elems gives    :  ", bounded_t2_candidates_vectors)
-        #lol#println("| "^(j-1), "---------------------------") 
-        # does not work yet
-       
-        #    Constraint on norm at al places:
-        #
-        #       k^2α ≤ l_j at all places
-        #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
-        #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
-        #
-        #good_norm(sk) = all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
-
-        #    Constraint as given by the crystallographic condition:
-        #
-        #       l | 2kα  
-        #    ⇔  2kα/l ∈ ring  
-        #    ⇔  sk (2α//ls) ∈ ring 
-        #    ⇔  sk (two_α_over_ls) ∈ ring 
-        #crystal(sk) = sk * two_α_over_ls ∈ ring
-
-        #integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
-
-        
 #        function nice(a,b)
 #            lb = isnothing(a) ? "-∞" :  string(round(Float64(VA.approx(a)),digits=1))
 #            ub = isnothing(a) ? "+∞" :  string(round(Float64(VA.approx(a)),digits=1))
 #            return "[" * lb * " , " * ub * "]"
 #        end
 
-        roots = Vector{Vector{nf_elem}}()
+    roots = Vector{Vector{nf_elem}}()
+    
+    # The idea is that interval_k_j gives an interval outside of which k_jα_j is not valid due to the constraints of acute angles given by previous roots.
+    # The code below SHOULD then use this interval to only iterate over k_js in this interval.
+    interval_αk = interval_for_k_j(constraints,j) 
+    #(global_lb,global_ub) = interval_k_j
+    
+
+    # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
+    @assert α_j > 0
+    no_lb = isnothing(interval_αk[1])
+    no_ub = isnothing(interval_αk[2])
+    lb_for_sk  = ( no_lb ? field(0) : interval_αk[1]//α_over_s )
+    ub_for_sk  = ( no_ub ? field(0) : interval_αk[2]//α_over_s )
+    if !no_lb && !no_ub && lb_for_sk > ub_for_sk
+        return roots
+    end
+
+    #if global_lb_for_sk > global_ub_for_sk 
+    #    return roots
+    #end
+    # IF interval management seems to be at fault, do
+    # (global_lb_for_sk,global_ub_for_sk) = (nothing,nothing)
+
+    stem_updated = copy(stem)
+    stem_can_rep_updated = copy(stem_can_rep)
+
+    
+    for ordered in t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]
+       
+        @toggled_assert issorted(ordered)
+        isempty(ordered) && continue
         
-        # The idea is that interval_k_j gives an interval outside of which k_jα_j is not valid due to the constraints of acute angles given by previous roots.
-        # The code below SHOULD then use this interval to only iterate over k_js in this interval.
-        interval_αk = interval_for_k_j(constraints,j) 
-        #(global_lb,global_ub) = interval_k_j
-        
 
-        # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
-        @assert α_j > 0
-        no_lb = isnothing(interval_αk[1])
-        no_ub = isnothing(interval_αk[2])
-        lb_for_sk  = ( no_lb ? field(0) : interval_αk[1]//α_over_s )
-        ub_for_sk  = ( no_ub ? field(0) : interval_αk[2]//α_over_s )
-        if !no_lb && !no_ub && lb_for_sk > ub_for_sk
-            return roots
-        end
+        if (no_lb || lb_for_sk ≤ 0) && (no_ub || ub_for_sk ≥ 0) 
 
-        #if global_lb_for_sk > global_ub_for_sk 
-        #    return roots
-        #end
-        # IF interval management seems to be at fault, do
-        # (global_lb_for_sk,global_ub_for_sk) = (nothing,nothing)
-
-        stem_updated = copy(stem)
-        stem_can_rep_updated = copy(stem_can_rep)
-
-        
-        for ordered in t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]
-           
-            @toggled_assert issorted(ordered)
-            isempty(ordered) && continue
+            #last_idx_lb = searchsortedlast(ordered,-lb)
+            last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb_for_sk,:dummy),by=(x->x[1])))
+            #last_idx_ub = searchsortedlast(ordered,ub)
+            last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub_for_sk,:dummy),by=(x->x[1])))
             
+            for (sk,t2sk) in ordered[1:min(last_idx_ub,last_idx_lb)]
+                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true)
+            end
 
-            if (no_lb || lb_for_sk ≤ 0) && (no_ub || ub_for_sk ≥ 0) 
+            sign = last_idx_ub > last_idx_lb
+            for (sk,t2sk) in ordered[min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)]
+                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=sign,neg=!sign)
+            end
 
-                #last_idx_lb = searchsortedlast(ordered,-lb)
-                last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb_for_sk,:dummy),by=(x->x[1])))
-                #last_idx_ub = searchsortedlast(ordered,ub)
-                last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub_for_sk,:dummy),by=(x->x[1])))
-                
-                for (sk,t2sk) in ordered[1:min(last_idx_ub,last_idx_lb)]
-                    _add_if_all_good!(vd,sk,t2sk,t2_bound,two_α_over_ls,α_over_s²,s_j,v_j,l,l_j,P,ring,field,α_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true)
-                end
+        elseif (!no_lb && lb_for_sk ≥ 0) && (no_ub || ub_for_sk ≥ 0)
+            
+            #first_idx_lb = searchsortedfirst(ordered,lb)
+            first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb_for_sk,:dummy),by=(x->x[1])))
+            #last_idx_ub = searchsortedlast(ordered,ub)
+            last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub_for_sk,:dummy),by=(x->x[1])))
+            
+            for (sk,t2sk) in ordered[first_idx_lb:last_idx_ub]
+                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=false)
+            end
 
-                sign = last_idx_ub > last_idx_lb
-                for (sk,t2sk) in ordered[min(last_idx_lb,last_idx_ub)+1:max(last_idx_lb,last_idx_ub)]
-                    _add_if_all_good!(vd,sk,t2sk,t2_bound,two_α_over_ls,α_over_s²,s_j,v_j,l,l_j,P,ring,field,α_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=sign,neg=!sign)
-                end
+        elseif (no_lb || lb_for_sk ≤ 0) && (!no_ub && ub_for_sk ≤ 0)
+            
+            #first_idx_ub = searchsortedfirst(ordered,-ub)
+            first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub_for_sk,:dummy),by=(x->x[1])))
+            #last_idx_lb = searchsortedlast(ordered,-lb)
+            last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb_for_sk,:dummy),by=(x->x[1])))
 
-            elseif (!no_lb && lb_for_sk ≥ 0) && (no_ub || ub_for_sk ≥ 0)
-                
-                #first_idx_lb = searchsortedfirst(ordered,lb)
-                first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb_for_sk,:dummy),by=(x->x[1])))
-                #last_idx_ub = searchsortedlast(ordered,ub)
-                last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub_for_sk,:dummy),by=(x->x[1])))
-                
-                for (sk,t2sk) in ordered[first_idx_lb:last_idx_ub]
-                    _add_if_all_good!(vd,sk,t2sk,t2_bound,two_α_over_ls,α_over_s²,s_j,v_j,l,l_j,P,ring,field,α_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=false)
-                end
-
-            elseif (no_lb || lb_for_sk ≤ 0) && (!no_ub && ub_for_sk ≤ 0)
-                
-                #first_idx_ub = searchsortedfirst(ordered,-ub)
-                first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub_for_sk,:dummy),by=(x->x[1])))
-                #last_idx_lb = searchsortedlast(ordered,-lb)
-                last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb_for_sk,:dummy),by=(x->x[1])))
-
-                for (sk,t2sk) in ordered[first_idx_ub:last_idx_lb] 
-                    _add_if_all_good!(vd,sk,t2sk,t2_bound,two_α_over_ls,α_over_s²,s_j,v_j,l,l_j,P,ring,field,α_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=false,neg=true)
-                end
-
+            for (sk,t2sk) in ordered[first_idx_ub:last_idx_lb] 
+                _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=false,neg=true)
             end
 
         end
 
-         
-        return roots
-
     end
-    
+
+     
+    return roots
+
+
 end
 
 function extend_root_stem(
