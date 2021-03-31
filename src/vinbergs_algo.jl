@@ -385,6 +385,103 @@ end
 
 end
 
+@inline function _extend_root_stem_full(
+    vd::VinbergData,
+    stem::Vector{nf_elem},
+    stem_can_rep::Vector{nf_elem},
+    stem_length::Int,
+    root_length::nf_elem,
+    root_length_minus_stem_norm_squared::nf_elem,
+    constraints::AffineConstraints,
+    t2_cache::BoundedT2ElemsCache
+)::Vector{Vector{nf_elem}}
+
+    field = vd.field
+    ring = vd.ring
+    space = vd.quad_space
+    P = infinite_places(field)
+    l = root_length   
+
+    @toggled_assert stem_can_rep == to_can_rep(vd,stem) "Sanity check. `stem_can_rep` must always be equal to `to_can_rep(vd,stem)`!"
+    @toggled_assert times(vd,stem_can_rep,stem_can_rep) == l "Sanity check. If we are here, by the previous case (j==vd.dim) necessarily we have the right length."
+    @toggled_assert all(bound ≥ 0 for bound in c_values) "All affine constraints given by previous roots must be satisfied."
+
+    if is_integral(space, ring, stem_can_rep) && is_root(space,ring,stem_can_rep,l) 
+        # integralness should be guaranteed to hold for all but the last coordinate I think.
+        return Vector{Vector{nf_elem}}([copy(stem_can_rep)])
+    else
+        return Vector{Vector{nf_elem}}()
+    end
+end
+
+@inline function _extend_root_stem_one_coord_left(
+    vd::VinbergData,
+    stem::Vector{nf_elem},
+    stem_can_rep::Vector{nf_elem},
+    stem_length::Int,
+    root_length::nf_elem,
+    root_length_minus_stem_norm_squared::nf_elem,
+    constraints::AffineConstraints,
+    t2_cache::BoundedT2ElemsCache
+)::Vector{Vector{nf_elem}}
+   
+    
+    field = vd.field
+    ring = vd.ring
+    space = vd.quad_space
+    P = infinite_places(field)
+    l = root_length
+
+    j = stem_length + 1
+
+    α_j = vd.diagonal_values[j]
+    v_j = vd.diagonal_basis[j]    
+    s_j = vd.scaling[j]
+    l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
+    
+    #α_over_s = α_j//s_j
+    α_over_s = vd.diago_over_scaling[j]
+    #α_over_s² = α//s_j^2
+    α_over_s² = vd.diago_over_scalingsq[j]
+    #two_α_over_ls = 2*α//(l*s_j)
+    two_α_over_ls = vd.two_diago_over_scaling_times_length[vd.ring(l)][j]
+
+
+
+    # If k₁,…,k_{j-1} are chosen and k_j is the last one that needs to be found.
+    # If (α₁,…,α_j) is the diagonalized inner product, and r = (k₁,…,k_j) the root to be found, of normed² == l, then
+    # We have
+    # 
+    #   ∑_{i=1}^{j-1} k_i^2α_i + k_j^2α_j == normed²(r) == l 
+    #
+    # Which means k_j^2 = (l - ∑_{i=1}^{j-1}k_i^2α_i)/α_j.
+    issquare,square_root = Hecke.issquare(l_j//α_j)
+    
+    
+    if issquare && divides(l,2*square_root*α_j,ring) # crystal
+        roots = Vector{Vector{nf_elem}}()
+        
+        k = square_root
+        stem_updated = copy(stem)
+        stem_can_rep_updated = copy(stem_can_rep)
+
+        stem_updated[j] = k
+        stem_can_rep_updated = stem_can_rep + k .* v_j
+
+        append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
+        if k ≠ 0
+            stem_updated[j] = -k
+            stem_can_rep_updated = stem_can_rep + -k .* v_j
+            append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
+        end
+        
+        return roots
+        
+    else
+        return Vector{Vector{nf_elem}}()
+    end
+   
+end
 
 function _extend_root_stem(
     vd::VinbergData,
@@ -395,7 +492,7 @@ function _extend_root_stem(
     root_length_minus_stem_norm_squared::nf_elem,
     constraints::AffineConstraints,
     t2_cache::BoundedT2ElemsCache
-)
+)::Vector{Vector{nf_elem}}
  
     
     j = stem_length + 1 
@@ -429,32 +526,8 @@ function _extend_root_stem(
 
 
     if j == vd.dim + 1
-        
-        @toggled_assert stem_can_rep == to_can_rep(vd,stem) "Sanity check. `stem_can_rep` must always be equal to `to_can_rep(vd,stem)`!"
-        @toggled_assert times(vd,stem_can_rep,stem_can_rep) == l "Sanity check. If we are here, by the previous case (j==vd.dim) necessarily we have the right length."
-        @toggled_assert all(bound ≥ 0 for bound in c_values) "All affine constraints given by previous roots must be satisfied."
-
-        if is_integral(space, ring, stem_can_rep) && is_root(space,ring,stem_can_rep,l) 
-            # integralness should be guaranteed to hold for all but the last coordinate I think.
-            return Vector{Vector{nf_elem}}([copy(stem_can_rep)])
-        else
-            return Vector{Vector{nf_elem}}()
-        end
-
+        return _extend_root_stem_full(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
     end
-
-    α_j = vd.diagonal_values[j]
-    v_j = vd.diagonal_basis[j]    
-    s_j = vd.scaling[j]
-    l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
-    
-    #α_over_s = α_j//s_j
-    α_over_s = vd.diago_over_scaling[j]
-    #α_over_s² = α//s_j^2
-    α_over_s² = vd.diago_over_scalingsq[j]
-    #two_α_over_ls = 2*α//(l*s_j)
-    two_α_over_ls = vd.two_diago_over_scaling_times_length[vd.ring(l)][j]
-
 
 
 
@@ -467,41 +540,24 @@ function _extend_root_stem(
     
     if j == vd.dim
       
-        # If k₁,…,k_{j-1} are chosen and k_j is the last one that needs to be found.
-        # If (α₁,…,α_j) is the diagonalized inner product, and r = (k₁,…,k_j) the root to be found, of normed² == l, then
-        # We have
-        # 
-        #   ∑_{i=1}^{j-1} k_i^2α_i + k_j^2α_j == normed²(r) == l 
-        #
-        # Which means k_j^2 = (l - ∑_{i=1}^{j-1}k_i^2α_i)/α_j.
-        issquare,square_root = Hecke.issquare(l_j//α_j)
-        
-        
-        if issquare && divides(l,2*square_root*α_j,ring) # crystal
-            roots = Vector{Vector{nf_elem}}()
-            
-            k = square_root
-            stem_updated = copy(stem)
-            stem_can_rep_updated = copy(stem_can_rep)
-
-            stem_updated[j] = k
-            stem_can_rep_updated = stem_can_rep + k .* v_j
-
-            append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
-            if k ≠ 0
-                stem_updated[j] = -k
-                stem_can_rep_updated = stem_can_rep + -k .* v_j
-                append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
-            end
-            
-            return roots
-            
-        else
-            return Vector{Vector{nf_elem}}()
-        end
+        return _extend_root_stem_one_coord_left(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
 
     else
-       
+    
+        α_j = vd.diagonal_values[j]
+        v_j = vd.diagonal_basis[j]    
+        s_j = vd.scaling[j]
+        l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
+        
+        #α_over_s = α_j//s_j
+        α_over_s = vd.diago_over_scaling[j]
+        #α_over_s² = α//s_j^2
+        α_over_s² = vd.diago_over_scalingsq[j]
+        #two_α_over_ls = 2*α//(l*s_j)
+        two_α_over_ls = vd.two_diago_over_scaling_times_length[vd.ring(l)][j]
+
+
+      
         
         t2_bound = approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1
         last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
