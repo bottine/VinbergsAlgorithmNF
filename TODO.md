@@ -1,15 +1,12 @@
 # Too much performance regression, let's focus on this first:
 
 *   Ensure `_extend_root_stem` is well-optimized for julia:
-    *   Move inner functions out
-    *   Ensure that only `nf_elem` is used, and not `NfAbsOrdelem`
-    *   More generally, ensure type stability
+    *   Move inner functions out, is it worth it?
     *   Maybe make the recursive calls into a single loop
 *	Check which of the conditions on stem extension are most useful and which are costly and order them accordingly.
     *   It seems `crystal` is cheap, but `good_bounds` is expensive, mainly later on (e.g. for stems of length more than 5 out of 9)
-*   In the T₂ cache, store the T₂ norm along the elements, so that we don't need to recompute it ever.
-*   Make the output of the T₂ cache easier to deal with: probably output elements and their t2 norm and leave the verification to the caller…
 *   Maybe split `AffineConstraint` to manage it more easily?
+*   Store each of `stem,stem_can_rep,AffineConstraint, interval_kα,interval_sk,…` in a corresponding array of length `dim` so that we never need to allocate
 
 # Correctness
 
