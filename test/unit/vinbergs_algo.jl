@@ -1,4 +1,4 @@
-
+#=
 
 @testset "AffineConstraints" begin
     K,a = Hecke.rationals_as_number_field()
@@ -32,4 +32,4 @@
     @test VA.interval_for_k_j(constraint,2) == (1,-1)       # but what remains constrains y
 
 end
-
+=#

@@ -339,21 +339,32 @@ function update_constraints(ac::AffineConstraints,idx::Int,val_at_idx::nf_elem)
 
 end
 
-function interval_for_k_j(ac::AffineConstraints,j::Int)::Tuple{Union{Nothing,nf_elem},Union{Nothing,nf_elem}}
+
+const Interval = Tuple{Tuple{Bool,nf_elem},Tuple{Bool,nf_elem}}
+
+function interval_for_k_j(field,ac::AffineConstraints,j::Int)::Interval
     applicable = [(vec[j],val) for (vec,val,last) in zip(ac...) if last == j]
     pos = [v//c for (c,v) in applicable if c > 0]
     neg = [v//c for (c,v) in applicable if c < 0]
-    return (isempty(neg) ? nothing : maximum(neg), isempty(pos) ? nothing : minimum(pos))
+    no_lb = isempty(neg)
+    no_ub = isempty(pos)
+    lb = ( no_lb ? field(1) : maximum(neg) )::nf_elem
+    ub = ( no_ub ? field(0) : minimum(pos) )::nf_elem
+    return ((no_lb,lb),(no_ub,ub))
 end
 
 function in_interval(
     k,
-    interval::Tuple{Union{Nothing,nf_elem},Union{Nothing,nf_elem}}
+    interval::Interval
 )
-    (lb,ub) = interval
-    return (lb === nothing || k ≥ lb) && (ub === nothing || k ≤ ub)
+    (no_lb,lb,no_ub,ub) = interval
+    return (no_lb || k ≥ lb) && (no_ub || k ≤ ub)
 end
 
+function is_empty(i::Interval)
+    (no_lb,lb),(no_ub,ub) = i
+    return !no_lb && !no_ub && (lb > ub)
+end
 
 @inline function _extend_root_stem_full(
     vd::VinbergData,
@@ -454,63 +465,17 @@ end
    
 end
 
-@inline function _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true,check_t2=true)
-
-    ring = vd.ring
-    field = vd.field
-    P = infinite_places(field)
-
-    α_j = vd.diagonal_values[j]
-    v_j = vd.diagonal_basis[j]    
-    s_j = vd.scaling[j]
-    
-    #α_over_s = α_j//s_j
-    α_over_s = vd.diago_over_scaling[j]
-    #α_over_s² = α//s_j^2
-    α_over_s² = vd.diago_over_scalingsq[j]
-    #two_α_over_ls = 2*α//(l*s_j)
-    two_α_over_ls = vd.two_diago_over_scaling_times_length[ring(l)][j]
-
-
-    if (check_t2 ⇒ (Float64(t2sk) ≤ t2_bound)) &&
-        sk * two_α_over_ls ∈ ring && # crystallographic condition 
-        all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
-
-        k = sk // s_j.elem_in_nf
-        if pos 
-            @toggled_assert in_interval(k*α_j,interval_αk)
-            stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
-            stem_can_rep_updated = stem_can_rep + k .* v_j
-            if all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
-                append!(roots,new)
-            end
-        end
-        if neg && k≠0 
-            @toggled_assert in_interval(-k*α_j,interval_αk)
-            stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
-            stem_can_rep_updated = stem_can_rep - k .* v_j
-            if all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
-                append!(roots,new)
-            end
-        end
-
-    end
-
-end
 
 @inline function find_range(
     field,
-    interval_αk,
-    α_over_s,
-    ordered
-)
-    
-    no_lb = isnothing(interval_αk[1])
-    no_ub = isnothing(interval_αk[2])
-    lb  = ( no_lb ? field(35) : interval_αk[1]//α_over_s ) # 35 and -14 chosen at random because they don't matter!
-    ub  = ( no_ub ? field(-14) : interval_αk[2]//α_over_s )
+    interval_αk::Interval,
+    α_over_s::nf_elem,
+    ordered::Vector{Tuple{nf_elem,fmpq}}
+   )::Tuple{Int,Int,Int,Int}
+   
+    (no_lb,lb),(no_ub,ub) = interval_αk
+    lb  = interval_αk[1][2]//α_over_s 
+    ub  = interval_αk[2][2]//α_over_s 
     
     if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
 
@@ -600,7 +565,7 @@ function _extend_root_stem(
     #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
     #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
     #
-    #good_norm(sk) = all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
+    good_norm(sk) = all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
 
     #    Constraint as given by the crystallographic condition:
     #
@@ -608,23 +573,21 @@ function _extend_root_stem(
     #    ⇔  2kα/l ∈ ring  
     #    ⇔  sk (2α//ls) ∈ ring 
     #    ⇔  sk (two_α_over_ls) ∈ ring 
-    #crystal(sk) = sk * two_α_over_ls ∈ ring
+    crystal(sk) = sk * two_α_over_ls ∈ ring
 
-    #integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
+    integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
 
     
     roots = Vector{Vector{nf_elem}}()
     
     # The idea is that interval_k_j gives an interval outside of which k_jα_j is not valid due to the constraints of acute angles given by previous roots.
     # The code below SHOULD then use this interval to only iterate over k_js in this interval.
-    interval_αk = interval_for_k_j(constraints,j) 
+    interval_αk = interval_for_k_j(field,constraints,j) 
     
 
     # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
     @assert α_j > 0
-    no_lb = isnothing(interval_αk[1])
-    no_ub = isnothing(interval_αk[2])
-    if !no_lb && !no_ub && interval_αk[1] > interval_αk[2]
+    if is_empty(interval_αk)
         return roots
     end
 
@@ -643,16 +606,36 @@ function _extend_root_stem(
             sk,t2sk = ordered[i]
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
+            check_t2 = idx == last_bounded_t2_candidates_vector_idx
 
+            if (check_t2 ⇒ (Float64(t2sk) ≤ t2_bound_for_sk)) &&
+                crystal(sk) &&
+                good_norm(sk)
+                #sk * two_α_over_ls ∈ ring && # crystallographic condition 
+                #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
+                
+                k = sk // s_j.elem_in_nf
+                if pos 
+                    @toggled_assert in_interval(k*α_j,interval_αk)
+                    stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
+                    stem_can_rep_updated = stem_can_rep + k .* v_j
+                    if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
+                        new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
+                        append!(roots,new)
+                    end
+                end
+                if neg && k≠0 
+                    @toggled_assert in_interval(-k*α_j,interval_αk)
+                    stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
+                    stem_can_rep_updated = stem_can_rep - k .* v_j
+                    if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
+                        new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
+                        append!(roots,new)
+                    end
+                end
 
-            _add_if_all_good!(
-                vd,
-                sk,t2sk,
-                t2_bound_for_sk,
-                l,l_j,j,
-                stem,stem_updated,stem_can_rep,stem_can_rep_updated,
-                constraints,roots,interval_αk,t2_cache;pos=pos,neg=neg,check_t2=(idx==last_bounded_t2_candidates_vector_idx)
-            )
+            end
+
         end
     end
 
