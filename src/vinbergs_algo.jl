@@ -359,7 +359,7 @@ function in_interval(
 end
 
 
-@inline function _extend_root_stem_full(
+function _extend_root_stem_full(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
@@ -389,7 +389,7 @@ end
     end
 end
 
-@inline function _extend_root_stem_one_coord_left(
+function _extend_root_stem_one_coord_left(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
@@ -458,7 +458,7 @@ end
    
 end
 
-@inline function _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true,check_t2=true)
+function _add_if_all_good!(vd,sk,t2sk,t2_bound,l,l_j,j,stem,stem_updated,stem_can_rep,stem_can_rep_updated,constraints,roots,interval_αk,t2_cache;pos=true,neg=true,check_t2=true)
 
     ring = vd.ring
     field = vd.field
@@ -504,7 +504,7 @@ end
 
 end
 
-@inline function find_range(
+function find_range(
     field,
     interval_αk,
     α_over_s,
