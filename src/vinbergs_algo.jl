@@ -392,7 +392,7 @@ end
     if is_integral(space, ring, stem_can_rep) && is_root(space,ring,stem_can_rep,l) 
         # integralness should be guaranteed to hold for all but the last coordinate I think.
         append!(roots,[deepcopy(stem_can_rep)])
-    else
+    end
 end
 
 @inline function _extend_root_stem_one_coord_left!(
@@ -450,12 +450,12 @@ end
         #stem_can_rep_updated = stem_can_rep .+ k .* v_j
         u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,v_j)
 
-        _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
+        _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache,roots)
         if k ≠ 0
             stem_updated[j] = -k
             #stem_can_rep_updated = stem_can_rep .- k .* v_j
             u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,-v_j)
-            _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
+            _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache,roots)
         end
         
     else
@@ -685,7 +685,7 @@ function extend_root_stem(
 
     #@info "roots_for_pair($pair,$prev_roots)"
     roots_go_here = Vector{Vector{nf_elem}}()
-     _extend_root_stem!(vd,stem_diag_rep,stem_can_rep,stem_length,root_length,root_length-stem_norm_squared,constraints,t2_cache)
+     _extend_root_stem!(vd,stem_diag_rep,stem_can_rep,stem_length,root_length,root_length-stem_norm_squared,constraints,t2_cache,roots_go_here)
      return roots_go_here
 end
 
