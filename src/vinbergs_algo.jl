@@ -366,7 +366,7 @@ function is_empty(i::Interval)
     return !no_lb && !no_ub && (lb > ub)
 end
 
-@inline function _extend_root_stem_full(
+@inline function _extend_root_stem_full!(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
@@ -374,8 +374,9 @@ end
     root_length::nf_elem,
     root_length_minus_stem_norm_squared::nf_elem,
     constraints::AffineConstraints,
-    t2_cache::BoundedT2ElemsCache
-)::Vector{Vector{nf_elem}}
+    t2_cache::BoundedT2ElemsCache,
+    roots::Vector{Vector{nf_elem}}
+)
 
     field = vd.field
     ring = vd.ring
@@ -390,13 +391,11 @@ end
 
     if is_integral(space, ring, stem_can_rep) && is_root(space,ring,stem_can_rep,l) 
         # integralness should be guaranteed to hold for all but the last coordinate I think.
-        return Vector{Vector{nf_elem}}([deepcopy(stem_can_rep)])
+        append!(roots,[deepcopy(stem_can_rep)])
     else
-        return Vector{Vector{nf_elem}}()
-    end
 end
 
-@inline function _extend_root_stem_one_coord_left(
+@inline function _extend_root_stem_one_coord_left!(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
@@ -404,8 +403,9 @@ end
     root_length::nf_elem,
     root_length_minus_stem_norm_squared::nf_elem,
     constraints::AffineConstraints,
-    t2_cache::BoundedT2ElemsCache
-)::Vector{Vector{nf_elem}}
+    t2_cache::BoundedT2ElemsCache,
+    roots::Vector{Vector{nf_elem}}
+)
    
     
     field = vd.field
@@ -441,7 +441,6 @@ end
     
     
     if issquare && divides(l,2*square_root*α_j,ring) # crystal
-        roots = Vector{Vector{nf_elem}}()
         
         k = square_root
         stem_updated = deepcopy(stem) # This is very important for correctness
@@ -451,18 +450,16 @@ end
         #stem_can_rep_updated = stem_can_rep .+ k .* v_j
         u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,v_j)
 
-        append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
+        _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
         if k ≠ 0
             stem_updated[j] = -k
             #stem_can_rep_updated = stem_can_rep .- k .* v_j
             u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,-v_j)
-            append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
+            _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
         end
         
-        return roots
-        
     else
-        return Vector{Vector{nf_elem}}()
+        return 
     end
    
 end
@@ -503,7 +500,7 @@ end
 
 end
 
-function _extend_root_stem(
+function _extend_root_stem!(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
@@ -511,23 +508,24 @@ function _extend_root_stem(
     root_length::nf_elem,
     root_length_minus_stem_norm_squared::nf_elem,
     constraints::AffineConstraints,
-    t2_cache::BoundedT2ElemsCache
-)::Vector{Vector{nf_elem}}
+    t2_cache::BoundedT2ElemsCache,
+    roots::Vector{Vector{nf_elem}}
+)
  
     
     j = stem_length + 1 
     
     if clearly_inconsistent(constraints,j,vd.dim)
-        return Vector{Vector{nf_elem}}()
+        return
     end
     
 
     if j == vd.dim + 1
-        return _extend_root_stem_full(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
+        return _extend_root_stem_full!(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
     end
 
     if j == vd.dim
-        return _extend_root_stem_one_coord_left(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache)
+        return _extend_root_stem_one_coord_left!(vd,stem,stem_can_rep,stem_length,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
     end
 
     field = vd.field
@@ -582,8 +580,6 @@ function _extend_root_stem(
     integral(a_stem_can_rep) = all((a_stem_can_rep[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j])
 
     
-    roots = Vector{Vector{nf_elem}}()
-    
     # The idea is that interval_k_j gives an interval outside of which k_jα_j is not valid due to the constraints of acute angles given by previous roots.
     # The code below SHOULD then use this interval to only iterate over k_js in this interval.
     interval_αk = interval_for_k_j(field,constraints,j) 
@@ -592,7 +588,7 @@ function _extend_root_stem(
     # If the endpoints are not ±∞, rescale them to get endpoints for sk instead of endpoints of α*k
     @assert α_j > 0
     if is_empty(interval_αk)
-        return roots
+        return 
     end
 
     stem_updated = deepcopy(stem)
@@ -625,8 +621,7 @@ function _extend_root_stem(
                     #stem_can_rep_updated = stem_can_rep .+ k .* v_j
                     u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,v_j)
                     if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                        new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
-                        append!(roots,new)
+                        _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache,roots)
                     end
                 end
                 if neg && k≠0 
@@ -635,8 +630,7 @@ function _extend_root_stem(
                     #stem_can_rep_updated = stem_can_rep .- k .* v_j
                     u_plus_k_v(stem_can_rep_updated,stem_can_rep,-k,v_j)
                     if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                        new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
-                        append!(roots,new)
+                        _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache,roots)
                     end
                 end
 
@@ -645,8 +639,6 @@ function _extend_root_stem(
         end
     end
 
-     
-    return roots
 
 
 end
@@ -669,6 +661,8 @@ function extend_root_stem(
     constraints::AffineConstraints,
     t2_cache::BoundedT2ElemsCache
 )
+
+    
     stem_length = length(stem_diag_rep)
     stem_diag_rep = vcat(stem_diag_rep,fill(vd.field(0),vd.dim-length(stem_diag_rep)))
     stem_can_rep = to_can_rep(vd,stem_diag_rep)
@@ -690,7 +684,9 @@ function extend_root_stem(
 
 
     #@info "roots_for_pair($pair,$prev_roots)"
-    return  _extend_root_stem(vd,stem_diag_rep,stem_can_rep,stem_length,root_length,root_length-stem_norm_squared,constraints,t2_cache)
+    roots_go_here = Vector{Vector{nf_elem}}()
+     _extend_root_stem!(vd,stem_diag_rep,stem_can_rep,stem_length,root_length,root_length-stem_norm_squared,constraints,t2_cache)
+     return roots_go_here
 end
 
 function roots_at_distance_zero(vd::VinbergData)
