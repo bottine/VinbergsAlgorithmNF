@@ -7,20 +7,20 @@ mutable struct VinbergData
     gram_matrix::AbstractAlgebra.Generic.MatSpaceElem{nf_elem}
     quad_space::Hecke.QuadSpace{AnticNumberField,AbstractAlgebra.Generic.MatSpaceElem{nf_elem}}
 
-    diagonal_basis::Vector{Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}}
-    diagonal_values::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
-    scaling::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+    diagonal_basis::Vector{Vector{nf_elem}}
+    diagonal_values::Vector{nf_elem}
+    scaling::Vector{nf_elem}
     
     diagonal_change::Array{nf_elem,2}
     diagonal_change_inv::Array{nf_elem,2}
 
 
-    possible_root_norms_squared_up_to_squared_units::Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+    possible_root_norms_squared_up_to_squared_units::Vector{nf_elem}
 
     # Precomputed stuff:
     diago_over_scaling::Vector{nf_elem}
     diago_over_scalingsq::Vector{nf_elem}
-    two_diago_over_scaling_times_length::Dict{NfAbsOrdElem{AnticNumberField,nf_elem},Vector{nf_elem}}
+    two_diago_over_scaling_times_length::Dict{nf_elem,Vector{nf_elem}}
     diago_vector_last_on_coordinates::Vector{Vector{Int}}
 
 end
@@ -58,12 +58,12 @@ function VinbergData(number_field,gram_matrix)
     @assert negative_vector_index == 1
     #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
 
-    lengths = ring_of_integers.(possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space))
+    lengths = possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space) .|> (x -> x.elem_in_nf)
    
     # Precomputations ---
-    diago_over_scaling = [α//s.elem_in_nf for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 
-    diago_over_scalingsq = [α//(s.elem_in_nf^2) for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 
-    two_diago_over_scaling_times_length = Dict([l => (2//l.elem_in_nf) .* diago_over_scaling for l in lengths])::Dict{NfAbsOrdElem{AnticNumberField,nf_elem},Vector{nf_elem}}
+    diago_over_scaling = [α.elem_in_nf//s.elem_in_nf for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 
+    diago_over_scalingsq = [α.elem_in_nf//(s.elem_in_nf^2) for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 
+    two_diago_over_scaling_times_length = Dict([l => (2//l) .* diago_over_scaling for l in lengths])::Dict{nf_elem,Vector{nf_elem}}
     
     is_last_on_coord(vecs,v_i,c_i) = vecs[v_i][c_i]≠0 && all(vecs[i][c_i] == 0 for i in v_i+1:length(vecs))
     diago_vector_last_on_coordinates =[filter(c_i -> is_last_on_coord(diagonal_basis_vecs,v_i,c_i), 1:n) for v_i in 1:n] ::Vector{Vector{Int}}
@@ -75,9 +75,9 @@ function VinbergData(number_field,gram_matrix)
         ring_of_integers,
         matrix(number_field,gram_matrix),
         quad_space,
-        diagonal_basis_vecs,
-        diagonal_values,
-        scaling,
+        [[v.elem_in_nf for v in vec] for vec in diagonal_basis_vecs],
+        [v.elem_in_nf for v in diagonal_values],
+        [v.elem_in_nf for v in scaling],
         Matrix(matrix(number_field,diagonal_basis_vecs))',    # notice the transpose here and below. Much frustration took place before I found out I needed those!
         Matrix(inv(matrix(number_field,diagonal_basis_vecs)))',
         lengths,
@@ -161,10 +161,10 @@ end
 
 
 const LeastKByRootNormSquared = Dict{
-    NfAbsOrdElem{AnticNumberField,nf_elem},
+    nf_elem,
     Tuple{
-        NfAbsOrdElem{AnticNumberField,nf_elem},
-        Vector{NfAbsOrdElem{AnticNumberField,nf_elem}}
+        nf_elem,
+        Vector{nf_elem}
     }
 }
 
@@ -193,7 +193,7 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
         pop!(upscaled_candidates)
     end
 
-    candidates::Vector{nf_elem} = map(x -> x[1].elem_in_nf//s_1, upscaled_candidates) # Correct the scaling  
+    candidates::Vector{nf_elem} = map(x -> x[1]//s_1, upscaled_candidates) # Correct the scaling  
     # We only need k>0 because k=0 corresponds to hyperplane containing the basepoint, treated elsewhere
     @toggled_assert all(>(0),candidates)
 
@@ -244,7 +244,7 @@ function init_least_k_by_root_norm_squared(vd::VinbergData)
 
     return Dict(
         [
-            vd.ring(l) => next_min_k_for_l(vd,0,[],l)
+            l => next_min_k_for_l(vd,0,[],l)
             for l in vd.possible_root_norms_squared_up_to_squared_units
         ]
     )
@@ -256,7 +256,7 @@ function next_min_pair(vd,dict)
     min_pair = nothing
 
     # that's the value we want to minimize (related to the distance)
-    val(k,l) = field(k^2)//field(l)
+    val(k,l) = k^2//l
     
 
     for (l,(k,remaining)) in dict 
@@ -300,7 +300,7 @@ function bounded_t2_elems!(
             non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
         )
         sort!(new_elems,by=(x->x[1]))
-        new_elems_nf = map(x -> (field(x[1]),x[2]), new_elems)::Vector{Tuple{nf_elem,fmpq}}
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2]), new_elems)::Vector{Tuple{nf_elem,fmpq}}
         push!(cache.elems, new_elems_nf)
     end
     
@@ -426,7 +426,7 @@ end
     #α_over_s² = α//s_j^2
     α_over_s² = vd.diago_over_scalingsq[j]
     #two_α_over_ls = 2*α//(l*s_j)
-    two_α_over_ls = vd.two_diago_over_scaling_times_length[vd.ring(l)][j]
+    two_α_over_ls = vd.two_diago_over_scaling_times_length[l][j]
 
 
 
@@ -444,16 +444,16 @@ end
         roots = Vector{Vector{nf_elem}}()
         
         k = square_root
-        stem_updated = copy(stem)
-        stem_can_rep_updated = copy(stem_can_rep)
+        stem_updated = deepcopy(stem) # This is very important for correctness
+        stem_can_rep_updated = deepcopy(stem_can_rep) # Same
 
         stem_updated[j] = k
-        stem_can_rep_updated = stem_can_rep + k .* v_j
+        u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,v_j)
 
         append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
         if k ≠ 0
             stem_updated[j] = -k
-            stem_can_rep_updated = stem_can_rep + -k .* v_j
+            u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,-v_j)
             append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
         end
         
@@ -545,12 +545,12 @@ function _extend_root_stem(
     #α_over_s² = α//s_j^2
     α_over_s² = vd.diago_over_scalingsq[j]
     #two_α_over_ls = 2*α//(l*s_j)
-    two_α_over_ls = vd.two_diago_over_scaling_times_length[vd.ring(l)][j]
+    two_α_over_ls = vd.two_diago_over_scaling_times_length[l][j]
 
 
   
     
-    t2_bound_for_sk = approx_sum_at_places(field(l_j*s_j^2)//field(α_j),first_place_idx=1)+1
+    t2_bound_for_sk = approx_sum_at_places(l_j*s_j^2//α_j,first_place_idx=1)+1
     last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
         vd.field,
         vd.ring, 
@@ -591,8 +591,8 @@ function _extend_root_stem(
         return roots
     end
 
-    stem_updated = copy(stem)
-    stem_can_rep_updated = copy(stem_can_rep)
+    stem_updated = deepcopy(stem)
+    stem_can_rep_updated = deepcopy(stem_can_rep) #copy(stem_can_rep)
 
     
     for (idx,ordered) in enumerate(t2_cache.elems[1:last_bounded_t2_candidates_vector_idx])
@@ -614,11 +614,12 @@ function _extend_root_stem(
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
                 
-                k = sk // s_j.elem_in_nf
+                k = sk // s_j
                 if pos 
                     @toggled_assert in_interval(k*α_j,interval_αk)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
-                    stem_can_rep_updated = stem_can_rep + k .* v_j
+                    #stem_can_rep_updated = stem_can_rep .+ k .* v_j
+                    u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,v_j)
                     if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
                         new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache)
                         append!(roots,new)
@@ -627,7 +628,8 @@ function _extend_root_stem(
                 if neg && k≠0 
                     @toggled_assert in_interval(-k*α_j,interval_αk)
                     stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
-                    stem_can_rep_updated = stem_can_rep - k .* v_j
+                    #stem_can_rep_updated = stem_can_rep .- k .* v_j
+                    u_plus_k_v(stem_can_rep_updated,stem_can_rep,-k,v_j)
                     if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
                         new = _extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache)
                         append!(roots,new)
@@ -643,6 +645,18 @@ function _extend_root_stem(
     return roots
 
 
+end
+
+
+function u_plus_k_v(to,u,k,v)
+    @assert length(to) == length(u)
+    @assert length(to) == length(v)
+    @inbounds for i in 1:length(to)
+        mul!(to[i],k,v[i])
+        addeq!(to[i],u[i])
+    end
+    #@info "$to and $u + $k * $v"
+    @assert to == u + (k .* v)
 end
 
 function extend_root_stem(
@@ -673,7 +687,7 @@ function extend_root_stem(
 
 
     #@info "roots_for_pair($pair,$prev_roots)"
-    return  _extend_root_stem(vd,stem_diag_rep,stem_can_rep,stem_length,vd.field.(root_length),vd.field.(root_length-stem_norm_squared),constraints,t2_cache)
+    return  _extend_root_stem(vd,stem_diag_rep,stem_can_rep,stem_length,root_length,root_length-stem_norm_squared,constraints,t2_cache)
 end
 
 function roots_at_distance_zero(vd::VinbergData)
@@ -681,22 +695,22 @@ function roots_at_distance_zero(vd::VinbergData)
     t2_cache = BoundedT2ElemsCache(vd.field) 
     zero_stem = nf_elem[vd.field(0)]
     
-    return vcat([extend_root_stem(vd,zero_stem,vd.field(l),no_constraints(),t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
+    return vcat([extend_root_stem(vd,zero_stem,l,no_constraints(),t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
 end
 
 function cone_roots(vd,roots_at_distance_zero)
 
     @warn "Cone roots computation are approximative ⇒ double check the results by hand."
     @warn "If results look dubious, increasing LP precision by setting VinbergsAlgorithmNF.LP_PRECISION to something higher (currently $LP_PRECISION)"
-    roots_at_distance_zero = [vd.field.(root) for root in roots_at_distance_zero]
+    roots_at_distance_zero = [root for root in roots_at_distance_zero]
     @info "starting with $(length(roots_at_distance_zero)) roots at distance zero"
     
     len = length(roots_at_distance_zero)
 
     # We put first the roots with integer coordinates to maximize the chance of having them in the cone roots
     # It's not necessary but easier to analyze the output and compare with rgug then
-    integer_roots = filter(r -> all(isinteger,vd.field.(r)), roots_at_distance_zero)
-    non_integer_roots = filter(r -> !all(isinteger,vd.field.(r)), roots_at_distance_zero)
+    integer_roots = filter(r -> all(isinteger,r), roots_at_distance_zero)
+    non_integer_roots = filter(r -> !all(isinteger,r), roots_at_distance_zero)
     sort!(integer_roots)
     roots_at_distance_zero = vcat(integer_roots,non_integer_roots)
     @assert len == length(roots_at_distance_zero) "did we drop a root while reorgarizing them?"
@@ -738,7 +752,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     end
 
     (k,l) = pair
-    fake_dist = -(k^2)*vd.diagonal_values[1].elem_in_nf//(l.elem_in_nf)
+    fake_dist = -(k^2)*vd.diagonal_values[1]//(l)
    
     ######################## The following only useful for non-diags
     all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
@@ -771,7 +785,7 @@ function roots_for_next_pair!(vd,dict,prev_roots;t2_cache=nothing)
 
     pair = next_min_pair!(vd,dict)
     k,l = pair
-    fake_dist = -(k^2)*vd.diagonal_values[1].elem_in_nf//(l.elem_in_nf)
+    fake_dist = -(k^2)*vd.diagonal_values[1]//l
     @info "next pair is $pair (fake_dist is $fake_dist ≈ $(approx(fake_dist,8)))"
 
 
@@ -806,7 +820,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
         for root in new_roots 
             @info "Got new root $root"
             extend!(das,[Coxeter_coeff(vd.quad_space, vd.ring, old,root) for old in roots])
-            push!(roots,vd.field.(root))
+            push!(roots,root)
         end
 
 
