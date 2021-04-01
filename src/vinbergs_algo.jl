@@ -552,7 +552,8 @@ function _extend_root_stem(
 
   
     
-    t2_bound_for_sk = approx_sum_at_places(l_j//(α_over_s²),first_place_idx=1)+1
+    #t2_bound_for_sk = approx_sum_at_places(l_j//(α_over_s²),first_place_idx=1)+1
+    t2_bound_for_sk = Hecke.tr(l_j//(α_over_s²))
     last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
         vd.field,
         vd.ring, 
@@ -567,7 +568,8 @@ function _extend_root_stem(
     #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
     #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
     #
-    good_norm(sk) = all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
+    good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
+    #good_norm(sk) = true # all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
 
     #    Constraint as given by the crystallographic condition:
     #
@@ -610,7 +612,7 @@ function _extend_root_stem(
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
             check_t2 = idx == last_bounded_t2_candidates_vector_idx
 
-            if (check_t2 ⇒ (Float64(t2sk) ≤ t2_bound_for_sk)) &&
+            if (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) &&
                 crystal(sk) &&
                 good_norm(sk)
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
