@@ -1,5 +1,12 @@
 # Too much performance regression, let's focus on this first:
 
+
+*   Understand why commit 685fec1b92ed9f21eb8a725b933a32be1bed8130 is still faster than we are now.
+    This DOES NOT MAKE SENSE !?
+*   Explore whether our `@inline` are useful or not.
+*   Explore putting back `_extend_root_stem_one_coord_left` and `_extend_root_stem_full` in the main body.
+*   Probably fold both `_…one_coord_left` and `_full` into a single "last step". There is maybe a check we can do from Guglielmetti's thesis that could help too.
+*   Profile, find allocations and kill slownesses!!!
 *   Ensure `_extend_root_stem` is well-optimized for julia:
     *   Move inner functions out, is it worth it?
     *   Maybe make the recursive calls into a single loop
