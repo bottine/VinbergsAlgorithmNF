@@ -291,9 +291,9 @@ function bounded_t2_elems!(
     t2_bound,
     cache,
 )
-    int_bound = ceil(Int,t2_bound)
+    int_bound = ceil(t2_bound)
     if int_bound > cache.bounds[end]
-        with_margin = ceil(Int,int_bound*1.2)
+        with_margin = ceil(int_bound*1.2)
         push!(cache.bounds,with_margin)
         new_elems = filter(
             x -> x∉cache.elems[end],
@@ -357,7 +357,7 @@ function in_interval(
     k,
     interval::Interval
 )
-    (no_lb,lb,no_ub,ub) = interval
+    ((no_lb,lb),(no_ub,ub)) = interval
     return (no_lb || k ≥ lb) && (no_ub || k ≤ ub)
 end
 
@@ -390,7 +390,7 @@ end
 
     if is_integral(space, ring, stem_can_rep) && is_root(space,ring,stem_can_rep,l) 
         # integralness should be guaranteed to hold for all but the last coordinate I think.
-        return Vector{Vector{nf_elem}}([copy(stem_can_rep)])
+        return Vector{Vector{nf_elem}}([deepcopy(stem_can_rep)])
     else
         return Vector{Vector{nf_elem}}()
     end
@@ -448,11 +448,13 @@ end
         stem_can_rep_updated = deepcopy(stem_can_rep) # Same
 
         stem_updated[j] = k
+        #stem_can_rep_updated = stem_can_rep .+ k .* v_j
         u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,v_j)
 
         append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache))
         if k ≠ 0
             stem_updated[j] = -k
+            #stem_can_rep_updated = stem_can_rep .- k .* v_j
             u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,-v_j)
             append!(roots,_extend_root_stem(vd,stem_updated,stem_can_rep_updated,j,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache))
         end
@@ -550,7 +552,7 @@ function _extend_root_stem(
 
   
     
-    t2_bound_for_sk = approx_sum_at_places(l_j*s_j^2//α_j,first_place_idx=1)+1
+    t2_bound_for_sk = approx_sum_at_places(l_j//(α_over_s²),first_place_idx=1)+1
     last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
         vd.field,
         vd.ring, 
@@ -655,8 +657,7 @@ function u_plus_k_v(to,u,k,v)
         mul!(to[i],k,v[i])
         addeq!(to[i],u[i])
     end
-    #@info "$to and $u + $k * $v"
-    @assert to == u + (k .* v)
+    @toggled_assert to == u + (k .* v)
 end
 
 function extend_root_stem(
