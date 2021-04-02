@@ -14,6 +14,7 @@
     *   It seems `crystal` is cheap, but `good_bounds` is expensive, mainly later on (e.g. for stems of length more than 5 out of 9)
 *   Maybe split `AffineConstraint` to manage it more easily?
 *   Store each of `stem,stem_can_rep,AffineConstraint, interval_kα,interval_sk,…` in a corresponding array of length `dim` so that we never need to allocate
+*   Does storing approximate conjugates in `BoundedT2ElemsCache` help? (it could help in the computation of `good_bound` and in `find_range`…)
 
 # Correctness
 
