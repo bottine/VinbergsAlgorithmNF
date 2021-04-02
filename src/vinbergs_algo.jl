@@ -277,11 +277,11 @@ end
 
 mutable struct BoundedT2ElemsCache
     bounds::Vector{Int}
-    elems::Vector{Vector{Tuple{nf_elem,fmpq}}}
+    elems::Vector{Vector{Tuple{nf_elem,fmpq,Vector{arb}}}}
 end
 
 function BoundedT2ElemsCache(field)
-    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq}}}([[(field(0),fmpq(0))]]))
+    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{arb}}}}([[(field(0),fmpq(0),conjugates_real(field(0)))]]))
 end
 
 
@@ -295,12 +295,12 @@ function bounded_t2_elems!(
     if int_bound > cache.bounds[end]
         with_margin = ceil(int_bound*1.2)
         push!(cache.bounds,with_margin)
-        new_elems = filter(
-            x -> x∉cache.elems[end],
+        new_elems = filter( # could probably me optimized to not have to filter away
+            x -> all(x[1] ≠ y[1] for y in cache.elems[end]),
             non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
         )
         sort!(new_elems,by=(x->x[1]))
-        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2]), new_elems)::Vector{Tuple{nf_elem,fmpq}}
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],conjugates_real(x[1].elem_in_nf)), new_elems)::Vector{Tuple{nf_elem,fmpq,Vector{arb}}}
         push!(cache.elems, new_elems_nf)
     end
     
@@ -469,7 +469,7 @@ end
     field,
     interval_αk::Interval,
     α_over_s::nf_elem,
-    ordered::Vector{Tuple{nf_elem,fmpq}}
+    ordered::Vector{Tuple{nf_elem,fmpq,Vector{arb}}}
    )::Tuple{Int,Int,Int,Int}
    
     (no_lb,lb),(no_ub,ub) = interval_αk
@@ -478,21 +478,21 @@ end
     
     if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
 
-        last_idx_neg = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
-        last_idx_pos = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
+        last_idx_neg = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy,:dummy),by=(x->x[1])))
+        last_idx_pos = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy,:dummy),by=(x->x[1])))
         return (1,last_idx_pos,1,last_idx_neg)
 
     elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
         
-        first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb,:dummy),by=(x->x[1])))
-        last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
+        first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb,:dummy,:dummy),by=(x->x[1])))
+        last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy,:dummy),by=(x->x[1])))
         return (first_idx_lb,last_idx_ub,1,0)
 
 
     elseif (no_lb || lb ≤ 0) && (!no_ub && ub ≤ 0)
         
-        first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub,:dummy),by=(x->x[1])))
-        last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
+        first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub,:dummy,:dummy),by=(x->x[1])))
+        last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy,:dummy),by=(x->x[1])))
         return (1,0,first_idx_ub,last_idx_lb)
     end
     
@@ -511,7 +511,6 @@ function _extend_root_stem!(
     t2_cache::BoundedT2ElemsCache,
     roots::Vector{Vector{nf_elem}}
 )
- 
     
     j = stem_length + 1 
     
@@ -559,15 +558,16 @@ function _extend_root_stem!(
         t2_cache
     )
     
-   
+    conjugates_bound = conjugates_real(l_j//α_over_s²) 
     #    Constraint on norm at al places:
     #
     #       k^2α ≤ l_j at all places
     #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
     #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
     #
-    good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
-    #good_norm(sk) = true # all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
+    margin = 1//8 # because we use approximations!
+    good_norm(sk,conjugates_sk) = all(σsk^2 ≤ σbound + margin for (σsk,σbound) in zip(conjugates_sk,conjugates_bound))
+    #good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
 
     #    Constraint as given by the crystallographic condition:
     #
@@ -597,20 +597,21 @@ function _extend_root_stem!(
     
     for (idx,ordered) in enumerate(t2_cache.elems[1:last_bounded_t2_candidates_vector_idx])
        
-        @toggled_assert issorted(ordered)
+        @toggled_assert issorted(ordered,by=x->x[1])
         isempty(ordered) && continue
+        
+        check_t2 = idx == last_bounded_t2_candidates_vector_idx
         
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            sk,t2sk = ordered[i]
+            sk,t2sk,sk_conjugates = ordered[i]
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
-            check_t2 = idx == last_bounded_t2_candidates_vector_idx
 
             if (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) &&
                 crystal(sk) &&
-                good_norm(sk)
+                good_norm(sk,sk_conjugates)
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
                 
