@@ -602,8 +602,8 @@ function _extend_root_stem!(
     #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
     #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
     #
-    #good_norm(sk,conjs_sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
-    good_norm(sk,conjs_sk) = all( conjs_sk[i]^2 ≤ conjugates_bound[i]+1 for i in 1:length(conjugates_bound)) # that's approximative but should be good enough
+    good_norm(sk,conjs_sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
+    #good_norm(sk,conjs_sk) = all( conjs_sk[i]^2 ≤ conjugates_bound[i]+1 for i in 1:length(conjugates_bound)) # that's approximative but should be good enough
     #good_norm(sk) = true # all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
 
     #    Constraint as given by the crystallographic condition:
