@@ -1,6 +1,6 @@
 # Too much performance regression, let's focus on this first:
 
-
+*   
 *   Understand why commit 685fec1b92ed9f21eb8a725b933a32be1bed8130 is still faster than we are now.
     This DOES NOT MAKE SENSE !?
 *   Explore whether our `@inline` are useful or not.
@@ -14,15 +14,19 @@
     *   It seems `crystal` is cheap, but `good_bounds` is expensive, mainly later on (e.g. for stems of length more than 5 out of 9)
 *   Maybe split `AffineConstraint` to manage it more easily?
 *   Store each of `stem,stem_can_rep,AffineConstraint, interval_kα,interval_sk,…` in a corresponding array of length `dim` so that we never need to allocate
+*   Use the fact that approximate conjugates are stored in th t2cache in `find_range`
 
 # Correctness
 
 *	Make cone root computation exact
+*   For `good_norm` we compute with `Float64` which *could* result in invalid results, even with our margin… Is it possible in practice? worth correcting?
+    Possible way to correct: work with `BigFloat` with a known error bound → probably we should do this…
 
 # Efficiency
 
 *	Reduce allocations needed in `update_constraints` and `_extend_root_stem`? 
 *	Cone roots: One can fix an initial halfspace and only consider subsequent halfspaces when they have acute angle with the first one → should divide the time to find cone roots.
+    Maybe one can take as second halfspace one which has the most acute angle with the first one? I think it might still be wlog
 *	Whenever possible, use the diagonal form to compute inner products
 *	Profile and optimize whatever can be.
 
