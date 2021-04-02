@@ -103,12 +103,24 @@ function non_neg_short_t2_elems(O::NfAbsOrd, lb, ub)
     return map(v -> (abs(v[1]),v[2]), candidates)
 end
 
-upper(x, abs_tol::Int = 32) = BigFloat(conjugates_real(x,abs_tol)[1]) + BigFloat(2)^(-abs_tol)
-lower(x, abs_tol::Int = 32) = BigFloat(conjugates_real(x,abs_tol)[1]) - BigFloat(2)^(-abs_tol)
 approx(x, abs_tol::Int = 32) = BigFloat(conjugates_real(x,abs_tol)[1])
 approx(x::NfAbsOrdElem{AnticNumberField,nf_elem}, abs_tol::Int = 32) = BigFloat(conjugates_real(x.elem_in_nf,abs_tol)[1])
 
 approx_sum_at_places(val;first_place_idx) = sum(convert.(Float64,conjugates_real(val,32)[first_place_idx:end]))
+
+# Thanks Tommy Hofmann
+function get_enclosing_interval(x::arb)
+    a, b = BigFloat(), BigFloat()
+    ccall((:arb_get_interval_mpfr, Hecke.libarb), Cvoid, (Ref{BigFloat}, Ref{BigFloat}, Ref{arb}), a, b, x)
+    return a, b
+end
+
+get_enclosing_interval(x::nf_elem, abs_tol::Int = 32) = get_enclosing_interval(conjugates_real(x,abs_tol)[1])
+lower_float64(x::arb) = Float64(get_enclosing_interval(x)[1],RoundDown)
+upper_float64(x::arb) = Float64(get_enclosing_interval(x)[2],RoundUp)
+
+lower_float64(x::nf_elem) = lower_float64(conjugates_real(x,64)[1]) 
+upper_float64(x::nf_elem) = upper_float64(conjugates_real(x,64)[1]) 
 
 function diagm(K::AnticNumberField,diag)
     n = length(diag)

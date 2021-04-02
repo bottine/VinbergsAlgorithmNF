@@ -281,7 +281,7 @@ mutable struct BoundedT2ElemsCache
 end
 
 function BoundedT2ElemsCache(field)
-    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}}([[(field(0),fmpq(0),Float64.(conjugates_real(field(0))))]]))
+    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}}([[(field(0),fmpq(0),upper_float64.(conjugates_real(field(0),64)))]]))
 end
 
 
@@ -299,8 +299,10 @@ function bounded_t2_elems!(
             x -> all(x[1] ≠ y[1] for y in cache.elems[end]),
             non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
         )
+        @toggled_assert all(x≥0 for (x,t) in new_elems)
         sort!(new_elems,by=(x->x[1]))
-        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],Float64.(conjugates_real(x[1].elem_in_nf))), new_elems)::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
+        
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],[σx>0 ? upper_float64(σx) : upper_float64(-σx) for σx in conjugates_real(x[1].elem_in_nf,64)]), new_elems)::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
         push!(cache.elems, new_elems_nf)
     end
     
@@ -644,16 +646,26 @@ function _extend_root_stem!(
         t2_bound_for_sk,
         t2_cache
     )
+   
+    @toggled_assert l_j//α_over_s² == 0 || all(ispositive(l_j//α_over_s²,p) for p in P)
+    conjugates_bound = upper_float64.(sqrt.(conjugates_real(l_j//α_over_s²,64))) 
     
-    conjugates_bound = Float64.(conjugates_real(l_j//α_over_s²)) 
     #    Constraint on norm at al places:
     #
     #       k^2α ≤ l_j at all places
     #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
     #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
+    #    ⇔  |(sk)| ≤ √(l_j//α_over_s²) at all places
     #
-    margin = 1//8 # because we use approximations!
-    good_norm(sk,conjugates_sk) = all(σsk^2 ≤ σbound + margin for (σsk,σbound) in zip(conjugates_sk,conjugates_bound))
+    #
+    good_norm(sk,abs_conjugates_sk) = begin
+        is_in_bound = all(σsk ≤ σbound  for (σsk,σbound) in zip(abs_conjugates_sk,conjugates_bound))
+        @toggled_assert !is_in_bound ⇒ !exact_good_norm(sk) 
+        # Normally, the way we approximated the elements in abs_conjugates_sk and conjugates_bound (lower and upper respectively), we should be safe
+        # That is, if `is_in_bound` doesn't hold, then we really are out of bounds, so no good root lost.
+
+        return is_in_bound
+    end
     exact_good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P) # use this one if need to be sure
 
     #    Constraint as given by the crystallographic condition:
@@ -692,13 +704,13 @@ function _extend_root_stem!(
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            sk,t2sk,sk_conjugates = ordered[i]
+            sk,t2sk,abs_conjugates_sk = ordered[i]
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
             if (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) &&
                 crystal(sk) &&
-                good_norm(sk,sk_conjugates)
+                good_norm(sk,abs_conjugates_sk)
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
                 

@@ -19,8 +19,7 @@
 # Correctness
 
 *	Make cone root computation exact
-*   For `good_norm` we compute with `Float64` which *could* result in invalid results, even with our margin… Is it possible in practice? worth correcting?
-    Possible way to correct: work with `BigFloat` with a known error bound → probably we should do this…
+*   Ensure that the way we do `good_bounds` is safe: we take "safe" lower bounds of type `Float64` for the conjugates, and an upper bound of type `Float64` again for the bound, so it should be alright.
 
 # Efficiency
 
