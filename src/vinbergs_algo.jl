@@ -277,11 +277,11 @@ end
 
 mutable struct BoundedT2ElemsCache
     bounds::Vector{Int}
-    elems::Vector{Vector{Tuple{nf_elem,fmpq}}}
+    elems::Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}}
 end
 
 function BoundedT2ElemsCache(field)
-    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq}}}([[(field(0),fmpq(0))]]))
+    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}}([[(field(0),fmpq(0),Float64.(conjugates_real(field(0))))]]))
 end
 
 
@@ -300,7 +300,7 @@ function bounded_t2_elems!(
             non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
         )
         sort!(new_elems,by=(x->x[1]))
-        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2]), new_elems)::Vector{Tuple{nf_elem,fmpq}}
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],Float64.(conjugates_real(x[1].elem_in_nf))), new_elems)::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
         push!(cache.elems, new_elems_nf)
     end
     
@@ -350,6 +350,39 @@ function interval_for_k_j(field,ac::AffineConstraints,j::Int)::Interval
     no_ub = isempty(pos)
     lb = ( no_lb ? field(1) : maximum(neg) )::nf_elem
     ub = ( no_ub ? field(0) : minimum(pos) )::nf_elem
+    return ((no_lb,lb),(no_ub,ub))
+end
+
+# does not reduce allocations.
+# We would need to use AbstractAlgebra's dangerous mul! and others I think
+function interval_for_k_j2(field,ac::AffineConstraints,j::Int)::Interval
+    vecs,vals,last = ac
+    @assert length(vecs) == length(vals)
+    @assert length(vecs) == length(last)
+
+    lb = field(1)
+    ub = field(0)
+    no_lb = true
+    no_ub = true
+    @inbounds for idx in 1:length(vecs)
+        if last[idx] == j 
+            c = vecs[idx][j]
+            v = vals[idx]
+            a = v//c
+            # div!(a,v,c) this function does not exist
+            if c > 0
+                no_ub && (ub = a)
+                !no_ub && (ub = min(ub,a))
+                no_ub = false
+            elseif c < 0
+                no_lb && (lb = a)
+                !no_lb && (lb = max(lb,a))
+                no_lb = false
+            else
+                #@assert false "unreachable"
+            end
+        end
+    end
     return ((no_lb,lb),(no_ub,ub))
 end
 
@@ -469,30 +502,32 @@ end
     field,
     interval_αk::Interval,
     α_over_s::nf_elem,
-    ordered::Vector{Tuple{nf_elem,fmpq}}
+    ordered::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
    )::Tuple{Int,Int,Int,Int}
    
+    dummyvec = Float64[]
+
     (no_lb,lb),(no_ub,ub) = interval_αk
     lb  = interval_αk[1][2]//α_over_s 
     ub  = interval_αk[2][2]//α_over_s 
     
     if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
 
-        last_idx_neg = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
-        last_idx_pos = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
+        last_idx_neg = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy,dummyvec),by=(x->x[1])))
+        last_idx_pos = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy,dummyvec),by=(x->x[1])))
         return (1,last_idx_pos,1,last_idx_neg)
 
     elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
         
-        first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb,:dummy),by=(x->x[1])))
-        last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy),by=(x->x[1])))
+        first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb,:dummy,dummyvec),by=(x->x[1])))
+        last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy,dummyvec),by=(x->x[1])))
         return (first_idx_lb,last_idx_ub,1,0)
 
 
     elseif (no_lb || lb ≤ 0) && (!no_ub && ub ≤ 0)
         
-        first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub,:dummy),by=(x->x[1])))
-        last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy),by=(x->x[1])))
+        first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub,:dummy,dummyvec),by=(x->x[1])))
+        last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy,dummyvec),by=(x->x[1])))
         return (1,0,first_idx_ub,last_idx_lb)
     end
     
@@ -558,7 +593,8 @@ function _extend_root_stem!(
         t2_bound_for_sk,
         t2_cache
     )
-    
+   
+    conjugates_bound = Float64.(conjugates_real(l_j//α_over_s²))
    
     #    Constraint on norm at al places:
     #
@@ -566,7 +602,8 @@ function _extend_root_stem!(
     #    ⇔  (sk)^2 α/s^2 ≤ l_j at all places
     #    ⇔  (sk)^2 * α_over_s² ≤ l_j at all places
     #
-    good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
+    #good_norm(sk,conjs_sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
+    good_norm(sk,conjs_sk) = all( conjs_sk[i]^2 ≤ conjugates_bound[i]+1 for i in 1:length(conjugates_bound)) # that's approximative but should be good enough
     #good_norm(sk) = true # all( ≤(sk^2 * α_over_s²,l_j,p) for p in P)
 
     #    Constraint as given by the crystallographic condition:
@@ -603,14 +640,14 @@ function _extend_root_stem!(
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            sk,t2sk = ordered[i]
+            sk,t2sk,conjs_sk = ordered[i]
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
             check_t2 = idx == last_bounded_t2_candidates_vector_idx
 
             if (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) &&
                 crystal(sk) &&
-                good_norm(sk)
+                good_norm(sk,conjs_sk)
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
                 
