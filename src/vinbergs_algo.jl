@@ -507,8 +507,8 @@ midpoint(lo::Int, hi::Int) = lo + ((hi - lo) >>> 0x01)
 
 function custom_searchsortedfirst(v, x, x_approx)
     u = 1
-    lo = 1 
-    hi = length(v)
+    lo = 0 
+    hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
         if v[m][3][1] < x_approx
@@ -531,8 +531,8 @@ end
 # returns 0 if x is less than all values of v.
 function custom_searchsortedlast(v, x, x_approx)
     u = 1
-    lo = 1
-    hi = length(v)
+    lo = 0
+    hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
         if x_approx < v[m][3][1]
@@ -554,7 +554,6 @@ end
 @inline function find_range2(
     field,
     interval_αk::Interval,
-    approx_interval_αk::ApproxInterval,
     α_over_s::nf_elem,
     ordered::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
    )::Tuple{Int,Int,Int,Int}
@@ -689,8 +688,7 @@ function _extend_root_stem!(
         isempty(ordered) && continue
         
         check_t2 = idx == last_bounded_t2_candidates_vector_idx
-       
-
+     
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             

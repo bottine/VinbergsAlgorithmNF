@@ -103,6 +103,8 @@ function non_neg_short_t2_elems(O::NfAbsOrd, lb, ub)
     return map(v -> (abs(v[1]),v[2]), candidates)
 end
 
+upper(x, abs_tol::Int = 32) = BigFloat(conjugates_real(x,abs_tol)[1]) + BigFloat(2)^(-abs_tol)
+lower(x, abs_tol::Int = 32) = BigFloat(conjugates_real(x,abs_tol)[1]) - BigFloat(2)^(-abs_tol)
 approx(x, abs_tol::Int = 32) = BigFloat(conjugates_real(x,abs_tol)[1])
 approx(x::NfAbsOrdElem{AnticNumberField,nf_elem}, abs_tol::Int = 32) = BigFloat(conjugates_real(x.elem_in_nf,abs_tol)[1])
 
