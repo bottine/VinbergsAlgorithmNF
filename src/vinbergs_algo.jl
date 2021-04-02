@@ -277,11 +277,11 @@ end
 
 mutable struct BoundedT2ElemsCache
     bounds::Vector{Int}
-    elems::Vector{Vector{Tuple{nf_elem,fmpq,Vector{arb}}}}
+    elems::Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}}
 end
 
 function BoundedT2ElemsCache(field)
-    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{arb}}}}([[(field(0),fmpq(0),conjugates_real(field(0)))]]))
+    return (BoundedT2ElemsCache)(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}}([[(field(0),fmpq(0),Float64.(conjugates_real(field(0))))]]))
 end
 
 
@@ -300,7 +300,7 @@ function bounded_t2_elems!(
             non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
         )
         sort!(new_elems,by=(x->x[1]))
-        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],conjugates_real(x[1].elem_in_nf)), new_elems)::Vector{Tuple{nf_elem,fmpq,Vector{arb}}}
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],Float64.(conjugates_real(x[1].elem_in_nf))), new_elems)::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
         push!(cache.elems, new_elems_nf)
     end
     
@@ -341,6 +341,7 @@ end
 
 
 const Interval = Tuple{Tuple{Bool,nf_elem},Tuple{Bool,nf_elem}}
+const ApproxInterval = Tuple{Tuple{Bool,Float64},Tuple{Bool,Float64}}
 
 function interval_for_k_j(field,ac::AffineConstraints,j::Int)::Interval
     applicable = [(vec[j],val) for (vec,val,last) in zip(ac...) if last == j]
@@ -469,7 +470,7 @@ end
     field,
     interval_αk::Interval,
     α_over_s::nf_elem,
-    ordered::Vector{Tuple{nf_elem,fmpq,Vector{arb}}}
+    ordered::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
    )::Tuple{Int,Int,Int,Int}
    
     (no_lb,lb),(no_ub,ub) = interval_αk
@@ -499,6 +500,93 @@ end
     @assert false "should not be reachable"
 
 end
+
+
+# copied from julia Base
+midpoint(lo::Int, hi::Int) = lo + ((hi - lo) >>> 0x01)
+
+function custom_searchsortedfirst(v, x, x_approx)
+    u = 1
+    lo = 1 
+    hi = length(v)
+    @inbounds while lo < hi - u
+        m = midpoint(lo, hi)
+        if v[m][3][1] < x_approx
+            lo = m
+        else
+            hi = m
+        end
+    end
+    while v[hi][1] < x
+        hi == length(v) && return hi+1
+        hi += 1
+    end
+    while hi > 1 && v[hi-1][1] ≥ x
+        hi -= 1
+    end
+    return hi
+end
+
+# index of the last value of vector a that is less than or equal to x;
+# returns 0 if x is less than all values of v.
+function custom_searchsortedlast(v, x, x_approx)
+    u = 1
+    lo = 1
+    hi = length(v)
+    @inbounds while lo < hi - u
+        m = midpoint(lo, hi)
+        if x_approx < v[m][3][1]
+            hi = m
+        else
+            lo = m
+        end
+    end
+    while v[lo][1] > x
+        lo == 1 && return 0
+        lo -= 1
+    end
+    while lo < length(v) && v[lo+1][1] ≤ x
+        lo += 1
+    end
+    return lo
+end
+
+@inline function find_range2(
+    field,
+    interval_αk::Interval,
+    approx_interval_αk::ApproxInterval,
+    α_over_s::nf_elem,
+    ordered::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
+   )::Tuple{Int,Int,Int,Int}
+   
+    (no_lb,lb),(no_ub,ub) = interval_αk
+    lb  = interval_αk[1][2]//α_over_s 
+    ub  = interval_αk[2][2]//α_over_s 
+    
+    if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
+
+        last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,conjugates_real(-lb)[1]) )
+        last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,conjugates_real(ub)[1]) )
+        return (1,last_idx_pos,1,last_idx_neg)
+
+    elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
+        
+        first_idx_lb = (no_lb ? 1 : custom_searchsortedfirst(ordered,lb,conjugates_real(lb)[1]) )
+                        last_idx_ub = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,conjugates_real(ub)[1]) )
+        return (first_idx_lb,last_idx_ub,1,0)
+
+
+    elseif (no_lb || lb ≤ 0) && (!no_ub && ub ≤ 0)
+        
+        first_idx_ub = (no_ub ? 1 : custom_searchsortedfirst(ordered,-ub,conjugates_real(-ub)[1]) )
+                        last_idx_lb = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,conjugates_real(-lb)[1]) )
+        return (1,0,first_idx_ub,last_idx_lb)
+    end
+    
+    @assert false "should not be reachable"
+
+end
+
 
 function _extend_root_stem!(
     vd::VinbergData,
@@ -558,7 +646,7 @@ function _extend_root_stem!(
         t2_cache
     )
     
-    conjugates_bound = conjugates_real(l_j//α_over_s²) 
+    conjugates_bound = Float64.(conjugates_real(l_j//α_over_s²)) 
     #    Constraint on norm at al places:
     #
     #       k^2α ≤ l_j at all places
@@ -567,7 +655,7 @@ function _extend_root_stem!(
     #
     margin = 1//8 # because we use approximations!
     good_norm(sk,conjugates_sk) = all(σsk^2 ≤ σbound + margin for (σsk,σbound) in zip(conjugates_sk,conjugates_bound))
-    #good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P)
+    exact_good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P) # use this one if need to be sure
 
     #    Constraint as given by the crystallographic condition:
     #
@@ -601,7 +689,8 @@ function _extend_root_stem!(
         isempty(ordered) && continue
         
         check_t2 = idx == last_bounded_t2_candidates_vector_idx
-        
+       
+
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
