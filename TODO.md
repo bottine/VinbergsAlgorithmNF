@@ -1,6 +1,8 @@
+*   Make `find_range2` formally OK without the `±0.01` part (probably need to compute both lower and upper bounds for each `sk`).
+
 # Too much performance regression, let's focus on this first:
 
-*   Make `is_clearly_inconsistent` use `Float64`s to make computation faster.
+*   Make `is_clearly_inconsistent` use `Float64`s to make computation faster: how can this be done efficiently but formally OK?
 *   Use `Float64`s also for `find_range`
 *   In `T2Cache`, store also whether `sk * two_α_over_ls ∈ ring` for each pair `l,j` to allow crystal to use cached results.
 *   Understand why commit 685fec1b92ed9f21eb8a725b933a32be1bed8130 is still faster than we are now.

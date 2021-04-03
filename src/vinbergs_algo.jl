@@ -531,19 +531,20 @@ function custom_searchsortedfirst(v, x, x_approx)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if v[m][3][1] < x_approx
+        if v[m][3][1] < x_approx-0.01
             lo = m
         else
             hi = m
         end
     end
-    while v[hi][1] < x
+    #=
+    while hi≤length(v) && v[hi][1] < x
         hi == length(v) && return hi+1
         hi += 1
     end
     while hi > 1 && v[hi-1][1] ≥ x
         hi -= 1
-    end
+    end=#
     return hi
 end
 
@@ -555,19 +556,19 @@ function custom_searchsortedlast(v, x, x_approx)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if x_approx < v[m][3][1]
+        if x_approx+0.01 < v[m][3][1]
             hi = m
         else
             lo = m
         end
     end
-    while v[lo][1] > x
+    #=while lo ≥ 1 v[lo][1] > x
         lo == 1 && return 0
         lo -= 1
     end
     while lo < length(v) && v[lo+1][1] ≤ x
         lo += 1
-    end
+    end=#
     return lo
 end
 
@@ -575,7 +576,7 @@ end
     field,
     interval_αk::Interval,
     α_over_s::nf_elem,
-    ordered::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
+    ordered::Vector
    )::Tuple{Int,Int,Int,Int}
    
     (no_lb,lb),(no_ub,ub) = interval_αk
@@ -723,7 +724,7 @@ function _extend_root_stem!(
         
         check_t2 = idx == last_bounded_t2_candidates_vector_idx
      
-        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
+        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range2(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
             sk,t2sk,abs_conjugates_sk,crystal_mat = ordered[i]
