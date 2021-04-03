@@ -1,6 +1,8 @@
 
 module Lat
     
+    using LinearAlgebra
+
     """
         ⊕(M₁,M₂)
     Compute the "block diagonal" matrix with blocks ``M₁`` and ``M₂``, assuming both are square symetric.
@@ -33,12 +35,12 @@ module Lat
     I(n) = Matrix(LinearAlgebra.I(n))
     B(n) = begin
         @assert n ≥ 3
-        M = A_(n)
+        M = A(n)
         @assert false "TODO I'm not sure what the matrix should be!!"
     end
     D(n) = begin
         @assert n≥4
-        M = A_(n)
+        M = A(n)
         M[end,end-1] = 0
         M[end-1,end] = 0
         M[end,end-2] = -1
