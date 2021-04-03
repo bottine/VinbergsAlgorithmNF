@@ -6,7 +6,7 @@ VA = VinbergsAlgorithmNF
 K,a = quadratic_field(5) # a is -√5
 
 # The 9-dimensional lattice in Bugaenko's paper
-Bug = VA.:(⊕)((a-1).*K.(VA.I_), K.(VA.gram_E8))
+Bug = VA.Lat.:(⊕)((a-1).*VA.Lat.I(1), K.(VA.Lat.E(8)))
 
 # Takes long but should work
 vd = VinbergData(K,Bug)

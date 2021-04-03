@@ -1,6 +1,8 @@
 # Too much performance regression, let's focus on this first:
 
-*   
+*   Make `is_clearly_inconsistent` use `Float64`s to make computation faster.
+*   Use `Float64`s also for `find_range`
+*   In `T2Cache`, store also whether `sk * two_α_over_ls ∈ ring` for each pair `l,j` to allow crystal to use cached results.
 *   Understand why commit 685fec1b92ed9f21eb8a725b933a32be1bed8130 is still faster than we are now.
     This DOES NOT MAKE SENSE !?
 *   Explore whether our `@inline` are useful or not.

@@ -709,8 +709,9 @@ function _extend_root_stem!(
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
             if (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) &&
+                good_norm(sk,abs_conjugates_sk) &&
                 crystal(sk) &&
-                good_norm(sk,abs_conjugates_sk)
+                true
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
                 
