@@ -496,7 +496,7 @@ function custom_searchsortedfirst(v, x, x_lower)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if v[m][3][1] < x_lower
+        if upper_float64(v[m][1]) < x_lower
             lo = m
         else
             hi = m
@@ -514,7 +514,7 @@ function custom_searchsortedlast(v, x, x_upper)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if x_upper < v[m][3][1]
+        if x_upper < lower_float64(v[m][1])
             hi = m
         else
             lo = m
@@ -533,26 +533,37 @@ end
    
     (no_lb,lb),(no_ub,ub) = interval_αk
     lb  = interval_αk[1][2]//α_over_s 
-    ub  = interval_αk[2][2]//α_over_s 
+    ub  = interval_αk[2][2]//α_over_s
+    float_lb = no_lb ? 0.0 : lower_float64(lb)
+    float_ub = no_ub ? 0.0 : upper_float64(ub)
     
-    if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
+    if (no_lb || float_lb ≤ 0) && (no_ub || float_ub ≥ 0) 
 
-        last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,upper_float64(-lb)) )
-        last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,upper_float64(ub)) )
+        last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,-float_lb) )
+        last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,float_ub) )
+        @toggled_assert all(x[1]>ub for x in ordered[last_idx_pos+1:end])
+        @toggled_assert all(-x[1]<lb for x in ordered[last_idx_neg+1:end])
+        
         return (1,last_idx_pos,1,last_idx_neg)
 
-    elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
+    elseif (!no_lb && float_lb ≥ 0) && (no_ub || float_ub ≥ 0)
         
-        first_idx_lb = (no_lb ? 1 : custom_searchsortedfirst(ordered,lb,lower_float64(lb)) )
-        last_idx_ub = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,upper_float64(ub)) )
-        return (first_idx_lb,last_idx_ub,1,0)
+        first_idx_pos = (no_lb ? 1 : custom_searchsortedfirst(ordered,lb,float_lb) )
+        last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,float_ub) )
+        @toggled_assert all(x[1]>ub for x in ordered[last_idx_pos+1:end])
+        @toggled_assert all(x[1]<lb for x in ordered[1:first_idx_pos-1])
+
+        return (first_idx_pos,last_idx_pos,1,0)
 
 
-    elseif (no_lb || lb ≤ 0) && (!no_ub && ub ≤ 0)
+    elseif (no_lb || float_lb ≤ 0) && (!no_ub && float_ub ≤ 0)
         
-        first_idx_ub = (no_ub ? 1 : custom_searchsortedfirst(ordered,-ub,lower_float64(-ub)) )
-        last_idx_lb = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,upper_float64(-lb)) )
-        return (1,0,first_idx_ub,last_idx_lb)
+        first_idx_neg = (no_ub ? 1 : custom_searchsortedfirst(ordered,-ub,-float_ub) )
+        last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,-float_lb) )
+        @toggled_assert all(-x[1]>ub for x in ordered[1:first_idx_neg-1])
+        @toggled_assert all(-x[1]<lb for x in ordered[last_idx_neg+1:end])
+        
+        return (1,0,first_idx_neg,last_idx_neg)
 
     end
     
