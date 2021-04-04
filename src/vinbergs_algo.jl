@@ -289,14 +289,14 @@ end
 
 function BoundedT2ElemsCache(vd::VinbergData)
     field = vd.field
-    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64},BitMatrix}}}([[(field(0),fmpq(0),conjugates_upper(vd,field(0)),crystal_matrix(vd,field(0)))]]))
+    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64},BitMatrix}}}([[(field(0),fmpq(0),conjugates_lower(vd,field(0)),crystal_matrix(vd,field(0)))]]))
 end
 
 function crystal_matrix(vd::VinbergData,sk)
     return BitMatrix(sk* vd.two_diago_over_scaling_times_length[l][j] ∈ vd.ring for l in 1:length(vd.possible_root_norms_squared_up_to_squared_units), j in 1:vd.dim)
 end
-function conjugates_upper(vd::VinbergData,sk)
-    return [σx>0 ? upper_float64(σx) : upper_float64(-σx) for σx in conjugates_real(sk,64)]
+function conjugates_lower(vd::VinbergData,sk)
+    return [0∈interval ? Float64(0) : min(abs.(interval)...) for interval in [get_enclosing_interval(σsk) for σsk in conjugates_real(sk,64)]]
 end
 
 function bounded_t2_elems!(
@@ -312,13 +312,14 @@ function bounded_t2_elems!(
         with_margin = ceil(int_bound*1.2)
         push!(cache.bounds,with_margin)
         new_elems = filter( # could probably me optimized to not have to filter away
-            x -> all(x[1] ≠ y[1] for y in cache.elems[end]),
+            x -> all(x[2] ≠ cache.bounds[end-1]),
             non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
         )
         @toggled_assert all(x≥0 for (x,t) in new_elems)
+        @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
         sort!(new_elems,by=(x->x[1]))
-        
-        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],conjugates_upper(vd,x[1].elem_in_nf),crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
+        # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],conjugates_lower(vd,x[1].elem_in_nf),crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
         push!(cache.elems, new_elems_nf)
     end
     
@@ -486,93 +487,44 @@ end
 end
 
 
-@inline function find_range(
-    field,
-    interval_αk::Interval,
-    α_over_s::nf_elem,
-    ordered#::Vector{Tuple{nf_elem,fmpq,Vector{Float64}}}
-   )::Tuple{Int,Int,Int,Int}
-   
-    (no_lb,lb),(no_ub,ub) = interval_αk
-    lb  = interval_αk[1][2]//α_over_s 
-    ub  = interval_αk[2][2]//α_over_s 
-    
-    if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
-
-        last_idx_neg = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy,:dummy),by=(x->x[1])))
-        last_idx_pos = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy,:dummy),by=(x->x[1])))
-        return (1,last_idx_pos,1,last_idx_neg)
-
-    elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
-        
-        first_idx_lb = (no_lb ? 1 : searchsortedfirst(ordered,(lb,:dummy,:dummy),by=(x->x[1])))
-        last_idx_ub = (no_ub ? length(ordered) : searchsortedlast(ordered,(ub,:dummy,:dummy),by=(x->x[1])))
-        return (first_idx_lb,last_idx_ub,1,0)
-
-
-    elseif (no_lb || lb ≤ 0) && (!no_ub && ub ≤ 0)
-        
-        first_idx_ub = (no_ub ? 1 : searchsortedfirst(ordered,(-ub,:dummy,:dummy),by=(x->x[1])))
-        last_idx_lb = (no_lb ? length(ordered) : searchsortedlast(ordered,(-lb,:dummy,:dummy),by=(x->x[1])))
-        return (1,0,first_idx_ub,last_idx_lb)
-    end
-    
-    @assert false "should not be reachable"
-
-end
-
-
-# copied from julia Base
+# copied from julia Base along with the two functions below, then modified
 midpoint(lo::Int, hi::Int) = lo + ((hi - lo) >>> 0x01)
 
-function custom_searchsortedfirst(v, x, x_approx)
+function custom_searchsortedfirst(v, x, x_lower)
     u = 1
     lo = 0 
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if v[m][3][1] < x_approx-0.01
+        if v[m][3][1] < x_lower
             lo = m
         else
             hi = m
         end
     end
-    #=
-    while hi≤length(v) && v[hi][1] < x
-        hi == length(v) && return hi+1
-        hi += 1
-    end
-    while hi > 1 && v[hi-1][1] ≥ x
-        hi -= 1
-    end=#
+
     return hi
 end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function custom_searchsortedlast(v, x, x_approx)
+function custom_searchsortedlast(v, x, x_upper)
     u = 1
     lo = 0
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if x_approx+0.01 < v[m][3][1]
+        if x_upper < v[m][3][1]
             hi = m
         else
             lo = m
         end
     end
-    #=while lo ≥ 1 v[lo][1] > x
-        lo == 1 && return 0
-        lo -= 1
-    end
-    while lo < length(v) && v[lo+1][1] ≤ x
-        lo += 1
-    end=#
+    
     return lo
 end
 
-@inline function find_range2(
+@inline function find_range(
     field,
     interval_αk::Interval,
     α_over_s::nf_elem,
@@ -585,22 +537,23 @@ end
     
     if (no_lb || lb ≤ 0) && (no_ub || ub ≥ 0) 
 
-        last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,conjugates_real(-lb)[1]) )
-        last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,conjugates_real(ub)[1]) )
+        last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,upper_float64(-lb)) )
+        last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,upper_float64(ub)) )
         return (1,last_idx_pos,1,last_idx_neg)
 
     elseif (!no_lb && lb ≥ 0) && (no_ub || ub ≥ 0)
         
-        first_idx_lb = (no_lb ? 1 : custom_searchsortedfirst(ordered,lb,conjugates_real(lb)[1]) )
-        last_idx_ub = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,conjugates_real(ub)[1]) )
+        first_idx_lb = (no_lb ? 1 : custom_searchsortedfirst(ordered,lb,lower_float64(lb)) )
+        last_idx_ub = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,upper_float64(ub)) )
         return (first_idx_lb,last_idx_ub,1,0)
 
 
     elseif (no_lb || lb ≤ 0) && (!no_ub && ub ≤ 0)
         
-        first_idx_ub = (no_ub ? 1 : custom_searchsortedfirst(ordered,-ub,conjugates_real(-ub)[1]) )
-        last_idx_lb = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,conjugates_real(-lb)[1]) )
+        first_idx_ub = (no_ub ? 1 : custom_searchsortedfirst(ordered,-ub,lower_float64(-ub)) )
+        last_idx_lb = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,upper_float64(-lb)) )
         return (1,0,first_idx_ub,last_idx_lb)
+
     end
     
     @assert false "should not be reachable"
@@ -724,7 +677,7 @@ function _extend_root_stem!(
         
         check_t2 = idx == last_bounded_t2_candidates_vector_idx
      
-        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range2(field,interval_αk, α_over_s, ordered) 
+        (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
             sk,t2sk,abs_conjugates_sk,crystal_mat = ordered[i]
