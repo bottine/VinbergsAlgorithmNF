@@ -44,7 +44,11 @@ lattices = [
     
     for (name,matrix,known_roots) in lattices
         @testset "$name" begin
+            if name == "diag_-2ϕ₀,1,1,1,1" # The toggleableasserts are too expensive for this one
+                toggle(false)
+            end
             compare_vinberg_outputs(L,matrix,known_roots)
+            toggle(true)
         end
     end
 

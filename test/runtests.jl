@@ -4,7 +4,7 @@ using Hecke
 using LinearAlgebra
 using CoxeterDiagrams
 VA = VinbergsAlgorithmNF
-
+using ToggleableAsserts
 # Unit tests, eventually:
 
 include("unit/vinbergs_algo.jl")
@@ -32,6 +32,7 @@ end
     include("some_known_lattices/sqrt2.jl")
     include("some_known_lattices/sqrt5.jl")
     include("some_known_lattices/sqrt13.jl")
+
     include("some_known_lattices/cos2piover7.jl")
 end
 if "long" in ARGS
