@@ -280,7 +280,6 @@ mutable struct BoundedT2ElemsCache
     elems::Vector{Vector{Tuple{
                                nf_elem,
                                fmpq,
-                               Tuple{Float64,Float64},
                                Vector{Float64},
                                BitMatrix
                               }
@@ -290,21 +289,16 @@ end
 
 function BoundedT2ElemsCache(vd::VinbergData)
     field = vd.field
-    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Tuple{Float64,Float64},Vector{Float64},BitMatrix}}}([[(field(0),fmpq(0),conjugates_lower_and_interval(vd,field(0))...,crystal_matrix(vd,field(0)))]]))
+    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64},BitMatrix}}}([[(field(0),fmpq(0),conjugates_lower(vd,field(0)),crystal_matrix(vd,field(0)))]]))
 end
 
 function crystal_matrix(vd::VinbergData,sk)
     return BitMatrix(sk* vd.two_diago_over_scaling_times_length[l][j] ∈ vd.ring for l in 1:length(vd.possible_root_norms_squared_up_to_squared_units), j in 1:vd.dim)
 end
-
-function conjugates_intervals(vd::VinbergData,sk)
-    return [Float64.(get_enclosing_interval(σsk)) for σsk in conjugates_real(sk,64)]
+function conjugates_lower(vd::VinbergData,sk)
+    return [0∈interval ? Float64(0) : min(abs.(interval)...) for interval in [get_enclosing_interval(σsk) for σsk in conjugates_real(sk,64)]]
 end
 
-function conjugates_lower_and_interval(vd::VinbergData,sk)
-    ci = conjugates_intervals(vd,sk)
-    return ci[1],[0∈i ? Float64(0) : min(abs.(i)...) for i in ci[2:end]]
-end
 function bounded_t2_elems!(
     vd::VinbergData,
     t2_bound,
@@ -325,15 +319,7 @@ function bounded_t2_elems!(
         @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
         sort!(new_elems,by=(x->x[1]))
         # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
-        new_elems_nf = map(
-            x -> (
-                x[1].elem_in_nf,
-                x[2],
-                conjugates_lower_and_interval(vd,x[1].elem_in_nf)...,
-                crystal_matrix(vd,x[1].elem_in_nf)
-            ),
-            new_elems
-        )
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],conjugates_lower(vd,x[1].elem_in_nf),crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
         push!(cache.elems, new_elems_nf)
     end
     
@@ -504,18 +490,26 @@ end
 # copied from julia Base along with the two functions below, then modified
 midpoint(lo::Int, hi::Int) = lo + ((hi - lo) >>> 0x01)
 
+# Ideally for each element sk we'd store both upper and lower bound and could compare x_lower to sk_upper here in a cheap but "secure" fashion (our bounds might be a bit loose, but that wouldn't matter).
+# Sadly when I try to store both upper and lower in the T2Cache, something somewhere kills performance, and I could not find what. This is in 7f3d4d5b5f240568aa536114d578f728f0095152 and should be researched further!
 function custom_searchsortedfirst(v, x, x_lower)
     u = 1
     lo = 0 
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if v[m][3][2] < x_lower
+        if v[m][3][1] < x_lower
             lo = m
         else
             hi = m
         end
     end
+   
+    # correct in case our approximation were wrong. This could be made into another binary search but rarely happen and have a few iterations only
+    while hi > 1 && v[hi-1][1] ≥ x
+        hi -=1
+    end
+
     return hi
 end
 
@@ -527,13 +521,13 @@ function custom_searchsortedlast(v, x, x_upper)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if x_upper < v[m][3][1]
+        if x_upper < v[m][3][1] # v[m][3][1] is lower_float64(sk) if sk is v[m][1]
             hi = m
         else
             lo = m
         end
     end
-    
+    # here we don't need to correct, since x_upper is upper approx and v[m][3][1] is lower approx 
     return lo
 end
 
@@ -547,32 +541,36 @@ end
     (no_lb,lb),(no_ub,ub) = interval_αk
     lb  = interval_αk[1][2]//α_over_s 
     ub  = interval_αk[2][2]//α_over_s
-
-    float_lb = lower_float64(lb) 
-    float_ub = upper_float64(ub)
+    float_lb = no_lb ? 0.0 : lower_float64(lb)
+    float_ub = no_ub ? 0.0 : upper_float64(ub)
     
     if (no_lb || float_lb ≤ 0) && (no_ub || float_ub ≥ 0) 
 
         last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,-float_lb) )
         last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,float_ub) )
-        @toggled_assert last_idx_pos≠length(ordered) ⇒ ordered[last_idx_pos+1] > ub
-        @toggled_assert last_idx_neg≠length(ordered) ⇒ ordered[last_idx_neg+1] > -lb
+        @toggled_assert all(x[1]>ub for x in ordered[last_idx_pos+1:end])
+        @toggled_assert all(-x[1]<lb for x in ordered[last_idx_neg+1:end])
+        
         return (1,last_idx_pos,1,last_idx_neg)
 
     elseif (!no_lb && float_lb ≥ 0) && (no_ub || float_ub ≥ 0)
         
-        first_idx_lb = (no_lb ? 1 : custom_searchsortedfirst(ordered,lb,float_lb) )
-        last_idx_ub = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,float_ub) )
-        # also needs asserts
-        return (first_idx_lb,last_idx_ub,1,0)
+        first_idx_pos = (no_lb ? 1 : custom_searchsortedfirst(ordered,lb,float_lb) )
+        last_idx_pos = (no_ub ? length(ordered) : custom_searchsortedlast(ordered,ub,float_ub) )
+        @toggled_assert all(x[1]>ub for x in ordered[last_idx_pos+1:end])
+        @toggled_assert all(x[1]<lb for x in ordered[1:first_idx_pos-1])
+
+        return (first_idx_pos,last_idx_pos,1,0)
 
 
     elseif (no_lb || float_lb ≤ 0) && (!no_ub && float_ub ≤ 0)
         
-        first_idx_ub = (no_ub ? 1 : custom_searchsortedfirst(ordered,-ub,-float_ub) )
-        last_idx_lb = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,-float_lb) )
-        # also needs asserts
-        return (1,0,first_idx_ub,last_idx_lb)
+        first_idx_neg = (no_ub ? 1 : custom_searchsortedfirst(ordered,-ub,-float_ub) )
+        last_idx_neg = (no_lb ? length(ordered) : custom_searchsortedlast(ordered,-lb,-float_lb) )
+        @toggled_assert all(-x[1]>ub for x in ordered[1:first_idx_neg-1])
+        @toggled_assert all(-x[1]<lb for x in ordered[last_idx_neg+1:end])
+        
+        return (1,0,first_idx_neg,last_idx_neg)
 
     end
     
@@ -700,7 +698,7 @@ function _extend_root_stem!(
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            sk,t2sk,sk_box,abs_conjugates_sk,crystal_mat = ordered[i]
+            sk,t2sk,abs_conjugates_sk,crystal_mat = ordered[i]
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 

@@ -1,24 +1,5 @@
-*   Make `find_range2` formally OK without the `±0.01` part (probably need to compute both lower and upper bounds for each `sk`).
 
-# Too much performance regression, let's focus on this first:
 
-*   Make `is_clearly_inconsistent` use `Float64`s to make computation faster: how can this be done efficiently but formally OK?
-*   Use `Float64`s also for `find_range`
-*   In `T2Cache`, store also whether `sk * two_α_over_ls ∈ ring` for each pair `l,j` to allow crystal to use cached results.
-*   Understand why commit 685fec1b92ed9f21eb8a725b933a32be1bed8130 is still faster than we are now.
-    This DOES NOT MAKE SENSE !?
-*   Explore whether our `@inline` are useful or not.
-*   Explore putting back `_extend_root_stem_one_coord_left` and `_extend_root_stem_full` in the main body.
-*   Probably fold both `_…one_coord_left` and `_full` into a single "last step". There is maybe a check we can do from Guglielmetti's thesis that could help too.
-*   Profile, find allocations and kill slownesses!!!
-*   Ensure `_extend_root_stem` is well-optimized for julia:
-    *   Move inner functions out, is it worth it?
-    *   Maybe make the recursive calls into a single loop
-*	Check which of the conditions on stem extension are most useful and which are costly and order them accordingly.
-    *   It seems `crystal` is cheap, but `good_bounds` is expensive, mainly later on (e.g. for stems of length more than 5 out of 9)
-*   Maybe split `AffineConstraint` to manage it more easily?
-*   Store each of `stem,stem_can_rep,AffineConstraint, interval_kα,interval_sk,…` in a corresponding array of length `dim` so that we never need to allocate
-*   Use the fact that approximate conjugates are stored in th t2cache in `find_range`
 
 # Completeness
 
@@ -31,11 +12,29 @@
 
 # Efficiency
 
+*   Make `is_clearly_inconsistent` use `Float64`s somehow to make computation faster: how can this be done efficiently but formally OK?
+    I propose storing upper/lower (`Float64`) bounds in `AffineConstraint` along with every coeff and doing the computations on the u/l-bounds at the same time than on the exact elements.
+    Then, checking `is_clearly_inconsistent` is done first on the approximations: if deemed inconsistent we check that this really is, otherwise nothing to check but we may allow some useless roots.
+    **OR** we store `Arb` elements and don't even need to do a further check since these are well-behaved. We can also use those for `find_range`.
+*   Explore whether our `@inline` are useful or not.
+*   Explore putting back `_extend_root_stem_one_coord_left` and `_extend_root_stem_full` in the main body.
+*   Probably fold both `_…one_coord_left` and `_full` into a single "last step". There is maybe a check we can do from Guglielmetti's thesis that could help too.
+*   Profile, find allocations and kill slownesses!!!
+*   Ensure `_extend_root_stem` is well-optimized for julia:
+    *   Move inner functions out, is it worth it?
+    *   Maybe make the recursive calls into a single loop
+*	Check which of the conditions on stem extension are most useful and which are costly and order them accordingly.
+    *   It seems `crystal` is cheap, but `good_bounds` is expensive, mainly later on (e.g. for stems of length more than 5 out of 9)
+*   Maybe split `AffineConstraint` to manage it more easily?
+*   Store each of `stem,stem_can_rep,AffineConstraint, interval_kα,interval_sk,…` in a corresponding array of length `dim` so that we never need to allocate
+
 *	Reduce allocations needed in `update_constraints` and `_extend_root_stem`? 
 *	Cone roots: One can fix an initial halfspace and only consider subsequent halfspaces when they have acute angle with the first one → should divide the time to find cone roots.
     Maybe one can take as second halfspace one which has the most acute angle with the first one? I think it might still be wlog
 *	Whenever possible, use the diagonal form to compute inner products
 *	Profile and optimize whatever can be.
+*   Try to do `_extend_root_stem_one_coord_left` using the same strategy as others rathen than with `issquare` since `issquare` is pretty expensive it seems.
+
 
 # Quality
 
