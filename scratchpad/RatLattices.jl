@@ -1,8 +1,14 @@
+using Pkg
+Pkg.activate(".")
+
 using VinbergsAlgorithmNF
 using Hecke
 using LinearAlgebra
 using Logging
 using CoxeterDiagrams
+using ToggleableAsserts
+toggle(false)
+
 VA = VinbergsAlgorithmNF
 
 
@@ -53,7 +59,7 @@ for lat in vcat([S1,S2,B1,B2,B3,C1,C2,C3],[C4(n) for n in 3:7])
     println()
     println("Lattice       : ")
     display(lat)
-    
+    println() 
     vd = VinbergData(ℚ,lat)
     println("Basepoint     : ", VA.basepoint(vd))
     out = @timed VA.next_n_roots!(vd,n=20)
@@ -68,7 +74,7 @@ for lat in vcat([S1,S2,B1,B2,B3,C1,C2,C3],[C4(n) for n in 3:7])
 end
 
 print("\n"^10)
-print("COMPARING OUTPUTS!")
+print("COMPARING OUTPUTS:")
 println()
 
 # PR as in Proposed roots
