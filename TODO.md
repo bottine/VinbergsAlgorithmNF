@@ -20,6 +20,10 @@
 *   Store each of `stem,stem_can_rep,AffineConstraint, interval_kα,interval_sk,…` in a corresponding array of length `dim` so that we never need to allocate
 *   Use the fact that approximate conjugates are stored in th t2cache in `find_range`
 
+# Completeness
+
+* Allow choosing a (compact) basepoint when defining the lattice
+
 # Correctness
 
 *	Make cone root computation exact

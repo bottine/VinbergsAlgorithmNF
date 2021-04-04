@@ -32,7 +32,7 @@ module Lat
 
     U() = [0 1; 1 0]
     A(n) = Matrix(LinearAlgebra.SymTridiagonal([2 for i in 1:n], [-1 for i in 1:n-1]))
-    I(n) = Matrix(LinearAlgebra.I(n))
+    I(n) = Matrix(Int.(LinearAlgebra.I(n)))
     B(n) = begin
         @assert n ≥ 3
         M = A(n)
