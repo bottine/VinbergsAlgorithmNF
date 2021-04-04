@@ -280,6 +280,7 @@ mutable struct BoundedT2ElemsCache
     elems::Vector{Vector{Tuple{
                                nf_elem,
                                fmpq,
+                               Tuple{Float64,Float64},
                                Vector{Float64},
                                BitMatrix
                               }
@@ -289,14 +290,25 @@ end
 
 function BoundedT2ElemsCache(vd::VinbergData)
     field = vd.field
-    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Vector{Float64},BitMatrix}}}([[(field(0),fmpq(0),conjugates_lower(vd,field(0)),crystal_matrix(vd,field(0)))]]))
+    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{nf_elem,fmpq,Tuple{Float64,Float64},Vector{Float64},BitMatrix}}}([[(field(0),fmpq(0),conjugates_lower_and_enclosing_interval(vd,field(0))...,crystal_matrix(vd,field(0)))]]))
 end
 
 function crystal_matrix(vd::VinbergData,sk)
     return BitMatrix(sk* vd.two_diago_over_scaling_times_length[l][j] ∈ vd.ring for l in 1:length(vd.possible_root_norms_squared_up_to_squared_units), j in 1:vd.dim)
 end
-function conjugates_lower(vd::VinbergData,sk)
-    return [0∈interval ? Float64(0) : min(abs.(interval)...) for interval in [get_enclosing_interval(σsk) for σsk in conjugates_real(sk,64)]]
+
+function conjugates_lower_and_enclosing_interval(vd,sk)::Tuple{Tuple{Float64,Float64},Vector{Float64}}
+    enclosing_interval = (0.0,0.0)
+    conjugates_lower = Vector{Float64}(undef,length(infinite_places(vd.field))-1)
+    for (idx,σsk) in enumerate(conjugates_real(sk,64))
+        if idx == 1
+            enclosing_interval = Float64.(get_enclosing_interval(σsk))
+        else
+            interval = Float64.(get_enclosing_interval(σsk))
+            conjugates_lower[idx-1] = 0∈interval ? Float64(0) : min(abs.(interval)...)
+        end
+    end
+    return enclosing_interval,conjugates_lower
 end
 
 function bounded_t2_elems!(
@@ -319,7 +331,7 @@ function bounded_t2_elems!(
         @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
         sort!(new_elems,by=(x->x[1]))
         # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
-        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],conjugates_lower(vd,x[1].elem_in_nf),crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
+        new_elems_nf = map(x -> (x[1].elem_in_nf,x[2],conjugates_lower_and_enclosing_interval(vd,x[1].elem_in_nf)...,crystal_matrix(vd,x[1].elem_in_nf)), new_elems)::Vector{Tuple{nf_elem,fmpq,Tuple{Float64,Float64},Vector{Float64},BitMatrix}}
         push!(cache.elems, new_elems_nf)
     end
     
@@ -496,7 +508,7 @@ function custom_searchsortedfirst(v, x, x_lower)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if upper_float64(v[m][1]) < x_lower
+        if v[m][3][2] < x_lower
             lo = m
         else
             hi = m
@@ -514,7 +526,7 @@ function custom_searchsortedlast(v, x, x_upper)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if x_upper < lower_float64(v[m][1])
+        if x_upper < v[m][3][1]
             hi = m
         else
             lo = m
@@ -691,7 +703,7 @@ function _extend_root_stem!(
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            sk,t2sk,abs_conjugates_sk,crystal_mat = ordered[i]
+            sk,t2sk,enclosure_sk,abs_conjugates_sk,crystal_mat = ordered[i]
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
