@@ -490,17 +490,24 @@ end
 # copied from julia Base along with the two functions below, then modified
 midpoint(lo::Int, hi::Int) = lo + ((hi - lo) >>> 0x01)
 
+# Ideally for each element sk we'd store both upper and lower bound and could compare x_lower to sk_upper here in a cheap but "secure" fashion (our bounds might be a bit loose, but that wouldn't matter).
+# Sadly when I try to store both upper and lower in the T2Cache, something somewhere kills performance, and I could not find what. This is in 7f3d4d5b5f240568aa536114d578f728f0095152 and should be researched further!
 function custom_searchsortedfirst(v, x, x_lower)
     u = 1
     lo = 0 
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if upper_float64(v[m][1]) < x_lower
+        if v[m][3][1] < x_lower
             lo = m
         else
             hi = m
         end
+    end
+   
+    # correct in case our approximation were wrong. This could be made into another binary search but rarely happen and have a few iterations only
+    while hi > 1 && v[hi-1][1] ≥ x
+        hi -=1
     end
 
     return hi
@@ -514,13 +521,13 @@ function custom_searchsortedlast(v, x, x_upper)
     hi = length(v)+1
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if x_upper < lower_float64(v[m][1])
+        if x_upper < v[m][3][1] # v[m][3][1] is lower_float64(sk) if sk is v[m][1]
             hi = m
         else
             lo = m
         end
     end
-    
+    # here we don't need to correct, since x_upper is upper approx and v[m][3][1] is lower approx 
     return lo
 end
 
