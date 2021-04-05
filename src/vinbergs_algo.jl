@@ -411,7 +411,7 @@ function is_empty(i::Interval)
     return !no_lb && !no_ub && (lb > ub)
 end
 
-@inline function _extend_root_stem_full!(
+@inline function _add_if_root_valid_root!(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
@@ -623,18 +623,21 @@ function _extend_root_stem!(
         return
     end
     
-    if root_length_minus_stem_norm_squared == 0 && all(bound ≥ 0 for bound in constraints[2]) # no more space in the root_length. I don't think this present "short_circuiting" necessarily helps a lot but it might do
-
-        return _extend_root_stem_full!(vd,stem,stem_can_rep,vd.dim,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
+    if root_length_minus_stem_norm_squared == 0 # no more space in the root_length. I don't think this present "short_circuiting" necessarily helps a lot but it might do
+        if all(bound ≥ 0 for bound in constraints[2]) 
+            return _add_if_root_valid_root!(vd,stem,stem_can_rep,vd.dim,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
+        else
+            return
+        end
     end
 
     if j == vd.dim + 1
-        return _extend_root_stem_full!(vd,stem,stem_can_rep,stem_length,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
+        return _add_if_root_valid_root!(vd,stem,stem_can_rep,stem_length,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
     end
 
-    if j == vd.dim
-        return _extend_root_stem_one_coord_left!(vd,stem,stem_can_rep,stem_length,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
-    end
+    #if j == vd.dim
+    #    return _extend_root_stem_one_coord_left!(vd,stem,stem_can_rep,stem_length,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
+    #end
 
     field = vd.field
     ring = vd.ring
@@ -722,8 +725,8 @@ function _extend_root_stem!(
     stem_updated = deepcopy(stem)
     stem_can_rep_updated = deepcopy(stem_can_rep) #copy(stem_can_rep)
 
-    
-    for (idx,ordered) in enumerate(t2_cache.elems[1:last_bounded_t2_candidates_vector_idx])
+    last_coordinate = j == vd.dim
+    for (idx,ordered) in ( last_coordinate ? [(last_bounded_t2_candidates_vector_idx,t2_cache.elems[last_bounded_t2_candidates_vector_idx])] : enumerate(t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]) )
        
         @toggled_assert issorted(ordered,by=x->x[1])
         isempty(ordered) && continue
@@ -737,10 +740,8 @@ function _extend_root_stem!(
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
-            if (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) &&
-                good_norm(sk,abs_conjugates_sk) &&
-                crystal(sk,crystal_mat) &&
-                true
+            if ( !last_coordinate ⇒ ( (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) && good_norm(sk,abs_conjugates_sk) && crystal(sk,crystal_mat) ) ) &&
+               ( last_coordinate ⇒ (sk^2 == l_j//α_over_s² && crystal(sk,crystal_mat) ))
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
                 
@@ -800,21 +801,6 @@ function extend_root_stem(
     
     stem_norm_squared = norm_squared(vd,stem_can_rep)
     
-    j = 1
-    #lol#println("| "^(j-1))
-    #lol#println("| "^(j-1), "---------------------------") 
-    #lol#println("| "^(j-1), "extend_root_stem")
-    #lol#println("| "^(j-1), "stem_diag_rep             :  ", stem_diag_rep)
-    #lol#println("| "^(j-1), "of length                 :  ", stem_length)
-    #lol#println("| "^(j-1), "stem_can_rep              :  ", stem_can_rep)
-    #lol#println("| "^(j-1), "root length               :  ", root_length)
-    #lol#println("| "^(j-1), "root length_minu_partial  :  ", root_length - stem_norm_squared)
-    #lol#println("| "^(j-1), "constraints               :  ", constraints)
-    #lol#println("| "^(j-1), "---------------------------") 
-
-
-
-    #@info "roots_for_pair($pair,$prev_roots)"
     roots_go_here = Vector{Vector{nf_elem}}()
      _extend_root_stem!(vd,stem_diag_rep,stem_can_rep,stem_length,root_length_idx,root_length,root_length-stem_norm_squared,constraints,t2_cache,roots_go_here)
      return roots_go_here
