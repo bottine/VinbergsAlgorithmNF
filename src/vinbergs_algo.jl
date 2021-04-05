@@ -1,3 +1,28 @@
+# Copied from the ToggleableAsserts source
+module Options
+
+    const options_lock = ReentrantLock()
+
+    @enum LastCoordinateMode IsSquare SameOld
+    last_coordinate_mode() = IsSquare
+    function set_last_coordinate_mode(v::LastCoordinateMode)
+        lock(options_lock) do
+            @eval Options last_coordinate_mode() = $v
+        end
+    end
+
+    @enum ConjugatesBoundCheckMode Exact FloatyPlusExactCheck OnlyFloaty
+    conjugates_bound_check_mode() = OnlyFloaty 
+    function set_conjugates_bound_check_mode(v::ConjugatesBoundCheckMode)
+        lock(options_lock) do
+            @eval Options conjugates_bound_check_mode() = $v
+        end
+    end
+
+    export set_last_coordinate_mode, last_coordinate_mode,
+           set_conjugates_bound_check_mode, conjugates_bound_check_mode
+end
+
 
 mutable struct VinbergData
 
@@ -598,6 +623,10 @@ function _extend_root_stem!(
         return
     end
     
+    if root_length_minus_stem_norm_squared == 0 && all(bound ≥ 0 for bound in constraints[2]) # no more space in the root_length. I don't think this present "short_circuiting" necessarily helps a lot but it might do
+
+        return _extend_root_stem_full!(vd,stem,stem_can_rep,vd.dim,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
+    end
 
     if j == vd.dim + 1
         return _extend_root_stem_full!(vd,stem,stem_can_rep,stem_length,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
@@ -649,15 +678,21 @@ function _extend_root_stem!(
     #    ⇔  |(sk)| ≤ √(l_j//α_over_s²) at all places
     #
     #
-    good_norm(sk,abs_conjugates_sk) = begin
-        is_in_bound = all(σsk ≤ σbound  for (σsk,σbound) in zip(abs_conjugates_sk,conjugates_bound))
-        @toggled_assert !is_in_bound ⇒ !exact_good_norm(sk) 
-        # Normally, the way we approximated the elements in abs_conjugates_sk and conjugates_bound (lower and upper respectively), we should be safe
-        # That is, if `is_in_bound` doesn't hold, then we really are out of bounds, so no good root lost.
-
-        return is_in_bound
-    end
     exact_good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P) # use this one if need to be sure
+    function good_norm(sk,abs_conjugates_sk)
+        if Options.conjugates_bound_check_mode() == Options.OnlyFloaty
+            return all(σsk ≤ σbound  for (σsk,σbound) in zip(abs_conjugates_sk,conjugates_bound))
+
+        elseif Options.conjugates_bound_check_mode() == Options.FloatyPlusExactCheck
+            is_in_bound = all(σsk ≤ σbound  for (σsk,σbound) in zip(abs_conjugates_sk,conjugates_bound))
+            @assert !is_in_bound ⇒ !exact_good_norm(sk)
+            return is_in_bound
+            # Normally, the way we approximated the elements in abs_conjugates_sk and conjugates_bound (lower and upper respectively), we should be safe
+            # That is, if `is_in_bound` doesn't hold, then we really are out of bounds, so no good root lost.
+        elseif Options.conjugates_bound_check_mode() == Options.Exact
+            return exact_good_norm(sk)
+        end
+    end
 
     #    Constraint as given by the crystallographic condition:
     #
