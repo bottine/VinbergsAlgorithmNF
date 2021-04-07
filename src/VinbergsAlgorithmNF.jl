@@ -9,7 +9,7 @@ module VinbergsAlgorithmNF
     import AbstractAlgebra
     import LinearAlgebra
 
-    const LP_PRECISION = 128::Int
+    const LP_PRECISION = 1024::Int
 
     include("util.jl")
     include("fields.jl")

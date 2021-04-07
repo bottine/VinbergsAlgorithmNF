@@ -411,7 +411,7 @@ function is_empty(i::Interval)
     return !no_lb && !no_ub && (lb > ub)
 end
 
-@inline function _add_if_root_valid_root!(
+@inline function _add_if_valid_root(
     vd::VinbergData,
     stem::Vector{nf_elem},
     stem_can_rep::Vector{nf_elem},
@@ -625,14 +625,14 @@ function _extend_root_stem!(
     
     if root_length_minus_stem_norm_squared == 0 # no more space in the root_length. I don't think this present "short_circuiting" necessarily helps a lot but it might do
         if all(bound ≥ 0 for bound in constraints[2]) 
-            return _add_if_root_valid_root!(vd,stem,stem_can_rep,vd.dim,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
+            return _add_if_valid_root(vd,stem,stem_can_rep,vd.dim,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
         else
             return
         end
     end
 
     if j == vd.dim + 1
-        return _add_if_root_valid_root!(vd,stem,stem_can_rep,stem_length,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
+        return _add_if_valid_root(vd,stem,stem_can_rep,stem_length,root_length_idx,root_length,root_length_minus_stem_norm_squared,constraints,t2_cache,roots)
     end
 
     #if j == vd.dim

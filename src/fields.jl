@@ -81,6 +81,7 @@ end
 
 function short_t2_elems(O::NfAbsOrd, lb, ub)
     
+
     @toggled_assert istotally_real(nf(O))
 
     trace = Hecke.trace_matrix(O)
