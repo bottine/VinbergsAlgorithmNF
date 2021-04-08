@@ -1,28 +1,3 @@
-# Copied from the ToggleableAsserts source
-module Options
-
-    const options_lock = ReentrantLock()
-
-    @enum LastCoordinateMode IsSquare SameOld
-    last_coordinate_mode() = IsSquare
-    function set_last_coordinate_mode(v::LastCoordinateMode)
-        lock(options_lock) do
-            @eval Options last_coordinate_mode() = $v
-        end
-    end
-
-    @enum ConjugatesBoundCheckMode Exact FloatyPlusExactCheck OnlyFloaty
-    conjugates_bound_check_mode() = OnlyFloaty 
-    function set_conjugates_bound_check_mode(v::ConjugatesBoundCheckMode)
-        lock(options_lock) do
-            @eval Options conjugates_bound_check_mode() = $v
-        end
-    end
-
-    export set_last_coordinate_mode, last_coordinate_mode,
-           set_conjugates_bound_check_mode, conjugates_bound_check_mode
-end
-
 
 mutable struct VinbergData
 
@@ -441,76 +416,6 @@ end
     end
 end
 
-@inline function _extend_root_stem_one_coord_left!(
-    vd::VinbergData,
-    stem::Vector{nf_elem},
-    stem_can_rep::Vector{nf_elem},
-    stem_length::Int,
-    root_length_idx::Int,
-    root_length::nf_elem,
-    root_length_minus_stem_norm_squared::nf_elem,
-    constraints::AffineConstraints,
-    t2_cache::BoundedT2ElemsCache,
-    roots::Vector{Vector{nf_elem}}
-)
-   
-    
-    field = vd.field
-    ring = vd.ring
-    space = vd.quad_space
-    P = infinite_places(field)
-    l = root_length
-
-    j = stem_length + 1
-
-    α_j = vd.diagonal_values[j]
-    v_j = vd.diagonal_basis[j]    
-    s_j = vd.scaling[j]
-    l_j = root_length_minus_stem_norm_squared # l - sum([vd.diagonal_values[i]*stem[i]^2 for i in 1:length(stem)]) 
-    
-    #α_over_s = α_j//s_j
-    α_over_s = vd.diago_over_scaling[j]
-    #α_over_s² = α//s_j^2
-    α_over_s² = vd.diago_over_scalingsq[j]
-    #two_α_over_ls = 2*α//(l*s_j)
-    two_α_over_ls = vd.two_diago_over_scaling_times_length[root_length_idx][j]
-
-
-
-    # If k₁,…,k_{j-1} are chosen and k_j is the last one that needs to be found.
-    # If (α₁,…,α_j) is the diagonalized inner product, and r = (k₁,…,k_j) the root to be found, of normed² == l, then
-    # We have
-    # 
-    #   ∑_{i=1}^{j-1} k_i^2α_i + k_j^2α_j == normed²(r) == l 
-    #
-    # Which means k_j^2 = (l - ∑_{i=1}^{j-1}k_i^2α_i)/α_j.
-    issquare,square_root = Hecke.issquare(l_j//α_j)
-    
-    
-    if issquare && divides(l,2*square_root*α_j,ring) # crystal
-        
-        k = square_root
-        stem_updated = deepcopy(stem) # This is very important for correctness
-        stem_can_rep_updated = deepcopy(stem_can_rep) # Same
-
-        stem_updated[j] = k
-        #stem_can_rep_updated = stem_can_rep .+ k .* v_j
-        u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,v_j)
-
-        _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,root_length_idx,l,l_j - k^2*α_j,update_constraints(constraints,j,k*α_j),t2_cache,roots)
-        if k ≠ 0
-            stem_updated[j] = -k
-            #stem_can_rep_updated = stem_can_rep .- k .* v_j
-            u_plus_k_v(stem_can_rep_updated,stem_can_rep,k,-v_j)
-            _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,root_length_idx,l,l_j - k^2*α_j,update_constraints(constraints,j,-k*α_j),t2_cache,roots)
-        end
-        
-    else
-        return 
-    end
-   
-end
-
 
 # copied from julia Base along with the two functions below, then modified
 midpoint(lo::Int, hi::Int) = lo + ((hi - lo) >>> 0x01)
@@ -661,17 +566,19 @@ function _extend_root_stem!(
 
 
   
+    l_j_ssq_over_α = l_j//α_over_s²
     
     #t2_bound_for_sk = approx_sum_at_places(l_j//(α_over_s²),first_place_idx=1)+1
-    t2_bound_for_sk = Hecke.tr(l_j//(α_over_s²))
+    t2_bound_for_sk = Hecke.tr(l_j_ssq_over_α)
     last_bounded_t2_candidates_vector_idx = bounded_t2_elems!(
         vd,
         t2_bound_for_sk,
         t2_cache
     )
-   
-    @toggled_assert l_j//α_over_s² == 0 || all(ispositive(l_j//α_over_s²,p) for p in P)
-    conjugates_bound = upper_float64.(sqrt.(conjugates_real(l_j//α_over_s²,64))) 
+  
+
+    @toggled_assert l_j_ssq_over_α == 0 || all(ispositive(l_j_ssq_over_α,p) for p in P)
+    conjugates_bound = upper_float64.(sqrt.(conjugates_real(l_j_ssq_over_α,64))) 
     
     #    Constraint on norm at al places:
     #
@@ -681,7 +588,7 @@ function _extend_root_stem!(
     #    ⇔  |(sk)| ≤ √(l_j//α_over_s²) at all places
     #
     #
-    exact_good_norm(sk) = all( ≤(sk^2,l_j // α_over_s²,p) for p in P) # use this one if need to be sure
+    exact_good_norm(sk) = all( ≤(sk^2,l_j_ssq_over_α,p) for p in P) # use this one if need to be sure
     function good_norm(sk,abs_conjugates_sk)
         if Options.conjugates_bound_check_mode() == Options.OnlyFloaty
             return all(σsk ≤ σbound  for (σsk,σbound) in zip(abs_conjugates_sk,conjugates_bound))
@@ -741,7 +648,7 @@ function _extend_root_stem!(
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
             if ( !last_coordinate ⇒ ( (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) && good_norm(sk,abs_conjugates_sk) && crystal(sk,crystal_mat) ) ) &&
-               ( last_coordinate ⇒ (sk^2 == l_j//α_over_s² && crystal(sk,crystal_mat) ))
+               ( last_coordinate ⇒ (sk^2 == l_j_ssq_over_α && crystal(sk,crystal_mat) ))
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
                 
@@ -817,7 +724,7 @@ end
 function cone_roots(vd,roots_at_distance_zero)
 
     @warn "Cone roots computation are approximative ⇒ double check the results by hand."
-    @warn "If results look dubious, increasing LP precision by setting VinbergsAlgorithmNF.LP_PRECISION to something higher (currently $LP_PRECISION)"
+    @warn "If results look dubious, increase LP precision by calling `VinbergsAlgorithm.Options.set_lp_precision(desired_precision::Int)` (currently $(Options.lp_precision()))"
     roots_at_distance_zero = [root for root in roots_at_distance_zero]
     @info "starting with $(length(roots_at_distance_zero)) roots at distance zero"
     
