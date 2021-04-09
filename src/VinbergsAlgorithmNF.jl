@@ -3,6 +3,7 @@ module VinbergsAlgorithmNF
     using Hecke
     using ToggleableAsserts
     using CoxeterDiagrams
+    using IntervalArithmetic
     using Convex, Tulip
 
     import MathOptInterface
