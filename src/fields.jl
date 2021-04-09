@@ -125,32 +125,32 @@ upper_float64(x::nf_elem) = upper_float64(conjugates_real(x,64)[1])
 
 mutable struct boxed_nf_elem
     x::nf_elem
-    boxes::Vector{IntervalArithmetic.Interval{Float64}}
+    box::IntervalArithmetic.Interval{Float64}
 end
 
-box(x::nf_elem) = boxed_nf_elem(x,get_enclosing_intervals_float64(x))
-approx(x::boxed_nf_elem) = x.boxes[1]
+box(x::nf_elem) = boxed_nf_elem(x,get_enclosing_intervals_float64(x)[1])
+approx(x::boxed_nf_elem) = x.box
 
 # exact
 ex(x::boxed_nf_elem) = x.x
 # approximate
-ap(x::boxed_nf_elem) = x.boxes[1]
-lo(x::boxed_nf_elem) = x.boxes[1].lo
-hi(x::boxed_nf_elem) = x.boxes[1].hi
+ap(x::boxed_nf_elem) = x.box
+lo(x::boxed_nf_elem) = x.box.lo
+hi(x::boxed_nf_elem) = x.box.hi
 
-Base.:(+)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x+y.x, x.boxes .+ y.boxes)
-Base.:(*)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x*y.x, x.boxes .* y.boxes)
-Base.:(-)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x-y.x, x.boxes .- y.boxes)
-Base.:(-)(x::boxed_nf_elem) = boxed_nf_elem(-x.x, .-x.boxes)
-Base.:(//)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x//y.x, x.boxes .// y.boxes)
+Base.:(+)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x+y.x, x.box + y.box)
+Base.:(*)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x*y.x, x.box * y.box)
+Base.:(-)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x-y.x, x.box - y.box)
+Base.:(-)(x::boxed_nf_elem) = boxed_nf_elem(-x.x, -x.box)
+Base.:(//)(x::boxed_nf_elem,y::boxed_nf_elem) = boxed_nf_elem(x.x//y.x, x.box / y.box)
 
 Base.:(==)(x::boxed_nf_elem,y::boxed_nf_elem) = ex(x) == ex(y)
 Base.:(==)(x::boxed_nf_elem,y::nf_elem) = ex(x) == y
 Base.:(==)(x::boxed_nf_elem,y::Integer) = ex(x) == y
 
 # means that the boxes don't intersect and are on the correct side of each other
-Base.:(<<)(x::boxed_nf_elem,y::boxed_nf_elem) = approx(x) ≺ approx(y) 
-Base.:(>>)(x::boxed_nf_elem,y::boxed_nf_elem) = approx(y) ≺ approx(x) 
+Base.:(<<)(x::boxed_nf_elem,y::boxed_nf_elem) = hi(x) < lo(y) 
+Base.:(>>)(x::boxed_nf_elem,y::boxed_nf_elem) = hi(y) < lo(x) 
 
 function diagm(K::AnticNumberField,diag)
     n = length(diag)

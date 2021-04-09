@@ -150,7 +150,7 @@ function fake_dist_to_basepoint(vd,u)
     
 
     fake_dist =  fake_dist_to_point(vd,basepoint(vd),u)
-    @toggled_assert fake_dist == -(to_diag_rep(vd,u)[1]^2)*vd.diagonal_values[1]//norm_squared(vd,u) 
+    @toggled_assert fake_dist == -(to_diag_rep(vd,u)[1]^2)*ex(vd.diagonal_values[1])//norm_squared(vd,u) 
 
     return fake_dist
 
@@ -195,7 +195,7 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
 
     candidates::Vector{nf_elem} = map(x -> x[1]//s_1, upscaled_candidates) # Correct the scaling  
     # We only need k>0 because k=0 corresponds to hyperplane containing the basepoint, treated elsewhere
-    @toggled_assert all(x->ex(x)>0,candidates)
+    @toggled_assert all(x->x>0,candidates)
 
     
    
@@ -279,6 +279,7 @@ mutable struct BoundedT2ElemsCache
     bounds::Vector{Int}
     elems::Vector{Vector{Tuple{
                                boxed_nf_elem,
+                               Vector{Interval{Float64}},
                                fmpq,
                                BitMatrix
                               }
@@ -288,7 +289,7 @@ end
 
 function BoundedT2ElemsCache(vd::VinbergData)
     field = vd.field
-    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{boxed_nf_elem,fmpq,BitMatrix}}}([[(box(field(0)),fmpq(0),crystal_matrix(vd,field(0)))]]))
+    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{boxed_nf_elem,Vector{Interval{Float64}},fmpq,BitMatrix}}}([[(box(field(0)),get_enclosing_intervals_float64(field(0)),fmpq(0),crystal_matrix(vd,field(0)))]]))
 end
 
 function crystal_matrix(vd::VinbergData,sk)
@@ -315,7 +316,7 @@ function bounded_t2_elems!(
         @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
         
         # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
-        new_elems_nf = map(x -> (box(x[1].elem_in_nf),x[2],crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
+        new_elems_nf = map(x -> (box(x[1].elem_in_nf),get_enclosing_intervals_float64(x[1].elem_in_nf),x[2],crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
         sort!(new_elems_nf,by=(x->lo(x[1])))
         sort!(new_elems_nf,by=(x->ex(x[1])))
         push!(cache.elems, new_elems_nf)
@@ -367,6 +368,24 @@ function interval_for_k_j(field,ac::AffineConstraints,j::Int)::Interval{Float64}
     ub = ( no_ub ? ∞ : minimum(x->hi(x),pos) )::Float64
     return IntervalArithmetic.is_valid_interval(lb,ub) ? lb..ub : ∅
 end
+
+# this looks like it should be faster (no temporary arrays created) but it results in slower runtime…
+function interval_for_k_j2(field,ac::AffineConstraints,j::Int)::Interval{Float64}
+    lb = -∞::Float64
+    ub = ∞::Float64
+    for (vec,val,last) in zip(ac...) 
+        if last == j
+            if lo(vec[j])>0
+                ub = max(ub,lo(val//vec[j]))
+            end
+            if hi(vec[j]) < 0
+                lb = min(lb,hi(val//vec[j]))
+            end
+        end
+    end
+    return IntervalArithmetic.is_valid_interval(lb,ub) ? lb..ub : ∅
+end
+
 
 
 @inline function _add_if_valid_root(
@@ -604,7 +623,7 @@ function _extend_root_stem!(
   
 
     #@toggled_assert l_j_ssq_over_α == 0 || all(ispositive(l_j_ssq_over_α,p) for p in P)
-    conjugates_bound = sqrt.((box(l_j_ssq_over_α)).boxes)
+    conjugates_bound = sqrt.((get_enclosing_intervals_float64(l_j_ssq_over_α)))
     
     #    Constraint on norm at al places:
     #
@@ -615,8 +634,9 @@ function _extend_root_stem!(
     #
     #
     exact_good_norm(sk) = all( ≤(sk^2,l_j_ssq_over_α,p) for p in P) # use this one if need to be sure
-    function good_norm(sk)
-        is_in_bound = all(!(σbound ≺ abs(σsk))  for (σsk,σbound) in zip(sk.boxes,conjugates_bound))
+    function good_norm(sk,boxes)
+        is_in_bound = all(!(σbound.hi < min(abs(σsk.lo),abs(σsk.hi)))  for (σsk,σbound) in zip(boxes,conjugates_bound)) 
+        # σbound ≺ abs(σsk) is would be cleaner (note that the symbol is `\prec`) but waiting for https://github.com/JuliaIntervals/IntervalArithmetic.jl/pull/443 
         if Options.conjugates_bound_check_mode() == Options.OnlyFloaty
             return is_in_bound 
 
@@ -661,7 +681,7 @@ function _extend_root_stem!(
     stem_can_rep_updated = deepcopy(stem_can_rep) #copy(stem_can_rep)
 
     last_coordinate = j == vd.dim
-    for (idx,ordered) in ( last_coordinate ? [(last_bounded_t2_candidates_vector_idx,t2_cache.elems[last_bounded_t2_candidates_vector_idx])] : enumerate(t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]) )
+    for (idx,ordered) in enumerate(last_coordinate ? t2_cache.elems[last_bounded_t2_candidates_vector_idx:last_bounded_t2_candidates_vector_idx] : t2_cache.elems[1:last_bounded_t2_candidates_vector_idx] )
        
         @toggled_assert issorted(ordered,by=x->ex(x[1]))
         isempty(ordered) && continue
@@ -671,11 +691,11 @@ function _extend_root_stem!(
         (first_idx_pos,last_idx_pos,first_idx_neg,last_idx_neg) = find_range(field,interval_αk, α_over_s, ordered) 
         for i in min(first_idx_pos,first_idx_neg):max(last_idx_pos,last_idx_neg)
             
-            sk,t2sk,crystal_mat = ordered[i]
+            sk,boxes,t2sk,crystal_mat = ordered[i]
             pos =  first_idx_pos ≤ i && last_idx_pos ≥ i
             neg = first_idx_neg ≤ i && last_idx_neg ≥ i
 
-            if ( !last_coordinate ⇒ ( (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) && good_norm(sk) && crystal(ex(sk),crystal_mat) ) ) &&
+            if ( !last_coordinate ⇒ ( (check_t2 ⇒ (t2sk ≤ t2_bound_for_sk)) && good_norm(sk,boxes) && crystal(ex(sk),crystal_mat) ) ) &&
                 ( last_coordinate ⇒ (ex(sk)^2 == l_j_ssq_over_α && crystal(ex(sk),crystal_mat) ))
                 #sk * two_α_over_ls ∈ ring && # crystallographic condition 
                 #all( ≤(sk^2 * α_over_s²,l_j,p) for p in P) #  norms are OK
@@ -716,7 +736,7 @@ function u_plus_k_v(to,u,k,v)
     @inbounds for i in 1:length(to)
         mul!(to[i].x,k.x,v[i].x)
         addeq!(to[i].x,u[i].x)
-        to[i].boxes .= u[i].boxes .+ k.boxes .* v[i].boxes
+        to[i].box = u[i].box + k.box * v[i].box
     end
     #@assert to = u .+ (k .* v)
 end
