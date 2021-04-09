@@ -100,10 +100,10 @@ Base.copy(x::NfAbsOrdElem) = x # Otherwise Nemo throws errors on small matrices
 # TODO: make exact
 function is_necessary_halfspace(gram,cone_roots,root) 
    
+    lp_precision = Options.lp_precision()
 
-
-    float_cone_roots_grammed = Vector{Vector{BigFloat}}([[approx(r,LP_PRECISION) for r in gram*cone_root] for cone_root in cone_roots])    
-    float_root_grammed = Vector{BigFloat}([approx(r,LP_PRECISION) for r in gram*root])
+    float_cone_roots_grammed = Vector{Vector{BigFloat}}([[approx(r,lp_precision) for r in gram*cone_root] for cone_root in cone_roots])    
+    float_root_grammed = Vector{BigFloat}([approx(r,lp_precision) for r in gram*root])
     
     
     n = length(root) 
