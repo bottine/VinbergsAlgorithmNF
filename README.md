@@ -1,5 +1,16 @@
 # 𝐕𝐢𝐧𝐧𝐲 𝐭𝐡𝐞 𝐜𝐨𝐱𝐛𝐨𝐲
 
+WIP implementation of Vinberg's algorithm over number fields (with PID algebraic integers).
+In `Julia`, using [`Hecke.jl`](https://github.com/thofma/Hecke.jl) for all number theoretic computations.
+Based on/inspired by
+
+* [Guglielmetti's `AlVin`](https://github.com/rgugliel/AlVin)
+* [Bogachev & Perepechko's `VinAl`](https://github.com/aperep/vinal)
+
+The performance is reasonable on small enough examples: Finding Bugaenko's 8 dimensional polyhedron (from the lattice -(√5+1) ⟂ E₈) took <10mn last time I tried.
+The program chokes on some seemingly easy examples (say the matrix obtained by replacing 0 by -(√5+1)/2 at positions (6,7) and (7,6) in the matrix E₆ ⟂ E₆).
+This is due to to the way the program handles non-diagonal matrices.
+
 ### *Learning to herd Coxeter diagrams in the Hyperbolic Plains since 2021*
 ### *Vinny is now working the fields (slowly)*
 
