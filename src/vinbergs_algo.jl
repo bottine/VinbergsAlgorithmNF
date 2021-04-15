@@ -1,5 +1,5 @@
 
-mutable struct VinbergData
+struct VinbergData
 
     dim::Int
     field::AnticNumberField

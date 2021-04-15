@@ -1,4 +1,6 @@
+# Top priority
 
+* Clean up and asserts
 
 
 # Completeness
@@ -12,13 +14,6 @@
 
 # Efficiency
 
-*   Make `is_clearly_inconsistent` use `Float64`s somehow to make computation faster: how can this be done efficiently but formally OK?
-    I propose storing upper/lower (`Float64`) bounds in `AffineConstraint` along with every coeff and doing the computations on the u/l-bounds at the same time than on the exact elements.
-    Then, checking `is_clearly_inconsistent` is done first on the approximations: if deemed inconsistent we check that this really is, otherwise nothing to check but we may allow some useless roots.
-    **OR** we store `Arb` elements and don't even need to do a further check since these are well-behaved. We can also use those for `find_range`.
-*   Explore whether our `@inline` are useful or not.
-*   Explore putting back `_extend_root_stem_one_coord_left` and `_extend_root_stem_full` in the main body.
-*   Probably fold both `_…one_coord_left` and `_full` into a single "last step". There is maybe a check we can do from Guglielmetti's thesis that could help too.
 *   Profile, find allocations and kill slownesses!!!
 *   Ensure `_extend_root_stem` is well-optimized for julia:
     *   Move inner functions out, is it worth it?
