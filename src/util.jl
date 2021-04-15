@@ -1,6 +1,6 @@
 
 
-function diagonalize(ring,A::Matrix)
+function diagonalize(ring,A::Matrix,v₀=nothing)
     # returns T and D with D = T'GT
     # algorithm copied from there https://math.stackexchange.com/questions/1388421/reference-for-linear-algebra-books-that-teach-reverse-hermite-method-for-symmetr
     # plus a gcd step to reduce the growth of values
@@ -13,8 +13,40 @@ function diagonalize(ring,A::Matrix)
     @assert n == m
 
     i0 = 1
-    I_ = LinearAlgebra.I 
+    I_ = ring.(collect(LinearAlgebra.I(n)))
     M = ring.([A I_])
+
+    if v₀ ≠ nothing
+        @assert v₀' * A * v₀ ≠ 0
+        
+        # Do dumb stuff to get v₀ as first vector: this can probably be made cleaner
+        # We essentially just force v₀ as first vector
+        
+        k = [i for i in 1:n if v₀[i]≠0][1]::Int
+
+        M[k,:] = v₀[k].*M[k,:]
+        M[:,k] = v₀[k].*M[:,k]
+
+        for i in 1:n
+            if i ≠ k
+                M[k,:] = M[k,:] +  v₀[i] .* M[i,:]
+                M[:,k] = M[:,k] +  v₀[i] .* M[:,i]
+            end
+        end
+      
+        M[1,:], M[k,:] = M[k,:], M[1,:]
+        M[:,1], M[:,k] = M[:,k], M[:,1]
+        
+        @assert M[1,n+1:end] == v₀
+    end
+
+    D = M[1:n,1:n]
+    Q = M[1:n,n+1:2*n]
+    P = Q'
+
+
+    @assert P'*A*P == D 
+    
     while i0 ≤ n
        
       
@@ -61,12 +93,12 @@ function diagonalize(ring,A::Matrix)
 
 end
 
-function diagonalize_and_get_scaling(gram,ring,field)
+function diagonalize_and_get_scaling(gram,ring,field,v₀=nothing)
 
     @assert LinearAlgebra.issymmetric(gram)
     n = size(gram)[1]
 
-    diagonal_values,diagonal_basis = diagonalize(ring,gram)
+    diagonal_values,diagonal_basis = diagonalize(ring,gram,v₀)
     @assert LinearAlgebra.isdiag(diagonal_values)
    
     diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]

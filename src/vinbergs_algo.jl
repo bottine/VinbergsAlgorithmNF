@@ -26,7 +26,7 @@ struct VinbergData
 end
 
 
-function VinbergData(number_field,gram_matrix)
+function VinbergData(number_field,gram_matrix,v₀=nothing)
 
     (n,m) = size(gram_matrix)
     @assert n == m "The Gram gram_matrix must be square."
@@ -34,11 +34,15 @@ function VinbergData(number_field,gram_matrix)
     ring_of_integers = maximal_order(number_field)
     quad_space = quadratic_space(number_field, matrix(number_field,gram_matrix))
     #quad_lattice = Hecke.lattice(quad_space)
-    
+        
     @assert is_feasible(quad_space) "The quadratic form must be feasible sig (n,1) and all conjugates sig (n+1,0)"
     @assert all(number_field(c) ∈ ring_of_integers for c in gram_matrix) "The Gram matrix must have coefficients in the ring of integers."
 
-    diagonal_basis_vecs,diagonal_values,scaling = diagonalize_and_get_scaling(gram_matrix,ring_of_integers,number_field)
+    if v₀≠nothing
+        @assert v₀' * gram_matrix * v₀ < 0
+    end
+
+    diagonal_basis_vecs,diagonal_values,scaling = diagonalize_and_get_scaling(gram_matrix,ring_of_integers,number_field,v₀)
     negative_vector_index = filter(x-> x[2]<0, collect(enumerate(diagonal_values)))[1][1]
     
     if negative_vector_index ≠ 1
@@ -47,6 +51,9 @@ function VinbergData(number_field,gram_matrix)
         scaling[1],scaling[negative_vector_index] = scaling[negative_vector_index],scaling[1]
     end
 
+    if v₀≠nothing
+        @assert v₀ == diagonal_basis_vecs[1]
+    end
     # Sort the basis vectors with increasing number of zeroes in their canonical coordinates:
     # This should improve stem enumeration on non-diagonal matrices: stems that define non-integral coordinates are spotted earlier.
     perm_zero = sortperm(diagonal_basis_vecs[2:end],by=(x->count(==(0),x))) .|> (x->x+1)
@@ -56,6 +63,7 @@ function VinbergData(number_field,gram_matrix)
 
     negative_vector_index = filter(x-> x[2]<0, collect(enumerate(diagonal_values)))[1][1]
     @assert negative_vector_index == 1
+    
     #@assert is_diago_and_feasible(number_field,gram_matrix) "The Gram matrix must be feasible, diagonal and its diagonal must be increasing."
 
     lengths = possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space) .|> (x -> x.elem_in_nf)

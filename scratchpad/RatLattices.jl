@@ -55,12 +55,12 @@ global_logger(logger)
 
 
 # Let's see what we get:
-for lat in vcat([S1,S2,B1,B2,B3,C1,C2,C3],[C4(n) for n in 3:7])
+for (lat,basepoint) in vcat([(S1,[1,-1,0,0]),(S2,nothing),(B1,nothing),(B2,nothing),(B3,nothing),(C1,nothing),(C2,nothing),(C3,nothing)],[(C4(n),nothing) for n in 3:7])
     println()
     println("Lattice       : ")
     display(lat)
     println() 
-    vd = VinbergData(ℚ,lat)
+    vd = VinbergData(ℚ,lat,basepoint)
     println("Basepoint     : ", VA.basepoint(vd))
     out = @timed VA.next_n_roots!(vd,n=20)
     (status,(roots,dict,diagram)) = out.value
@@ -92,9 +92,8 @@ PR_B2 = [[-1, -5, -1, 1], [1, 0, -1, 0], [0, 1, 1, 0], [1, 8, 2, -1], [0, 1, 0, 
 # Simpy output
 PR_B3 = [[-1, -1, -1, 1], [-1, 0, 0, 0], [0, -1, 1, 0], [3, 1, 0, 0], [2, 2, 1, -1]]
 
-for (lat,roots) in [(S1,PR_S1),(S2,PR_S2),(B1,PR_B1),(B2,PR_B2),(B3,PR_B3)]
-    vd = VinbergData(ℚ,lat)
-    
+for (lat,roots,basepoint) in [(S1,PR_S1,[-1,1,0,0]),(S2,PR_S2,nothing),(B1,PR_B1,nothing),(B2,PR_B2,nothing),(B3,PR_B3,nothing)]
+    vd = VinbergData(ℚ,lat,basepoint)
     (status,(my_roots,dict,diagram)) = VA.next_n_roots!(vd,n=20)
     @assert status # finishes with finite volume polytope
 
