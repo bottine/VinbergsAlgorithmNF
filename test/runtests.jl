@@ -7,7 +7,6 @@ VA = VinbergsAlgorithmNF
 using ToggleableAsserts
 # Unit tests, eventually:
 
-include("unit/vinbergs_algo.jl")
 
 
 
@@ -25,6 +24,11 @@ function compare_vinberg_outputs(K,matrix,known_roots)
     @test inc_dists(vd,roots_found) == inc_dists(vd,known_roots) 
     @test gram_coeffs(vd,roots_found) == gram_coeffs(vd,known_roots)
     @test CoxeterDiagrams.is_isom(VA.Coxeter_matrix(vd,roots_found),VA.Coxeter_matrix(vd,known_roots))
+end
+
+@testset "U n i t t e s t s (notreally)" begin
+    include("unit/util.jl")
+    include("unit/vinbergs_algo.jl")
 end
 
 @testset "Known lattices" begin

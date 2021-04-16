@@ -54,8 +54,9 @@ logger = SimpleLogger(io)
 global_logger(logger)
 
 
+#=
 # Let's see what we get:
-for (lat,basepoint) in vcat([(S1,[1,-1,0,0]),(S2,nothing),(B1,nothing),(B2,nothing),(B3,nothing),(C1,nothing),(C2,nothing),(C3,nothing)],[(C4(n),nothing) for n in 3:7])
+for (lat,basepoint) in vcat([(S1,[-1,1,0,0]),(S2,nothing),(B2,nothing),(B3,nothing),(C1,nothing),(C2,nothing),(C3,nothing)],[(C4(n),nothing) for n in 3:7])
     println()
     println("Lattice       : ")
     display(lat)
@@ -72,8 +73,7 @@ for (lat,basepoint) in vcat([(S1,[1,-1,0,0]),(S2,nothing),(B1,nothing),(B2,nothi
     display(roots)
     println()
 end
-
-print("\n"^10)
+=#
 print("COMPARING OUTPUTS:")
 println()
 
@@ -83,8 +83,6 @@ println()
 PR_S1 =  [[0, 0, -1, 0], [0, 0, 1, -2], [1, 1, 0, 0], [-1, 0, 1, 0], [-2, 2, 0, 1], [-19, 0, -1, 2], [-4, 1, 0, 1]]
 PR_S2 = [[0, 0, -1, 0], [0, 0, 1, -2], [1, -1, 0, 0], [0, 1, 1, 0], [2, 2, 0, 1], [0, 19, -1, 2], [1, 4, 0, 1]]
 
-# Simpy output: but the first root appears again negatively!
-PR_B1 = [[-3, -5, -1, 1], [-1, 0, 0, 0], [0, -1, -1, 0], [3, 5, 1, -1], [0, -1, 0, 0]]
 
 # Sage output
 PR_B2 = [[-1, -5, -1, 1], [1, 0, -1, 0], [0, 1, 1, 0], [1, 8, 2, -1], [0, 1, 0, 0]]
@@ -92,10 +90,26 @@ PR_B2 = [[-1, -5, -1, 1], [1, 0, -1, 0], [0, 1, 1, 0], [1, 8, 2, -1], [0, 1, 0, 
 # Simpy output
 PR_B3 = [[-1, -1, -1, 1], [-1, 0, 0, 0], [0, -1, 1, 0], [3, 1, 0, 0], [2, 2, 1, -1]]
 
-for (lat,roots,basepoint) in [(S1,PR_S1,[-1,1,0,0]),(S2,PR_S2,nothing),(B1,PR_B1,nothing),(B2,PR_B2,nothing),(B3,PR_B3,nothing)]
+for (lat,roots,basepoint) in [(S1,PR_S1,[-1,1,0,0]),(S2,PR_S2,nothing),(B2,PR_B2,nothing),(B3,PR_B3,nothing)]
+    println()
+    println("Lattice       : ")
+    display(lat)
+    println() 
+
+    # First run it on the cone roots contained in `roots` -> assuming same basepoint, the results should then be _exactly_ identical.
     vd = VinbergData(ℚ,lat,basepoint)
-    (status,(my_roots,dict,diagram)) = VA.next_n_roots!(vd,n=20)
+    proposed_cone_roots = deepcopy([ℚ.(r) for r in roots if VA.fake_dist_to_basepoint(vd,r)==0])
+    out =  @timed VA.next_n_roots!(vd,deepcopy(proposed_cone_roots),n=20)
+    (status,(my_roots,dict,diagram)) = out.value
+    time = out.time
     @assert status # finishes with finite volume polytope
+    @assert roots == my_roots
+
+    # Then run without specifying roots -> the diagrams should still agree
+    out =  @timed VA.next_n_roots!(vd,n=20)
+    (status,(my_roots,dict,diagram)) = out.value
+    time = out.time
+
 
     if !CoxeterDiagrams.is_isom(VA.Coxeter_matrix(vd,my_roots),VA.Coxeter_matrix(vd,roots))
         println("different Coxeter diagrams for:")

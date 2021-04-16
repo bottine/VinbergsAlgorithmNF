@@ -5,12 +5,10 @@
 
 # Completeness
 
-* Allow choosing a (compact) basepoint when defining the lattice
 
 # Correctness
 
 *	Make cone root computation exact
-*   Ensure that the way we do `good_bounds` is safe: we take "safe" lower bounds of type `Float64` for the conjugates, and an upper bound of type `Float64` again for the bound, so it should be alright.
 
 # Efficiency
 
