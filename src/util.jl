@@ -237,3 +237,113 @@ function matrix_to_dot_file(Mat, path)
         print(file, matrix_to_dot(Mat))
     end
 end
+
+
+##########################################
+#
+#  Read matrix/lattice info from JSON file
+#
+##########################################
+
+function JSON_field(desc)
+    if desc == "QQ"
+        
+        K,a = Hecke.rationals_as_number_field()
+        return ((K,a),[K(1)])
+    
+    elseif desc == "RC7"
+        Qx,x = Hecke.QQ["x"]
+        f = 8*x^3 + 4*x^2 - 4*x - 1
+        K,a = Hecke.NumberField(f, "a")
+        L, mL = simplify(K)
+        ϕ₂ = inv(mL)(a) # = cos(6π/7)
+        ϕ₀ = ϕ₂^2-1     # = cos(2π/7)
+        ϕ₁ = ϕ₀^2-1     # = cos(4π/7)
+
+        # To match Guglielmetti we have aϕ₀+bϕ₁+cϕ₂ =  [a//2,b//2,c//2]
+        
+        return ((L,ϕ₂),[1,2ϕ₂,(2ϕ₂)^2-2])
+
+    elseif "Quad" ∈ keys(desc)
+        p = desc["Quad"]::Int
+        K,a = Hecke.quadratic_field(p)
+        b = -a
+        ϕ = p % 4 == 1 ? (b+1)//2 : b
+
+        return ((K,b),[K(1),b])
+    end
+end
+
+function replace_symbol(s, field_gen, ring_gens)
+    if s == Symbol("A")
+        return field_gen
+    end
+    for (idx,letter) in enumerate("abcdefghi") # don't need that many letters
+        if s == Symbol(letter)
+            @assert idx ≤ length(ring_gens) "Can't translate entry: too many letters!!!"
+            return ring_gens[idx]
+        end
+    end
+    return s
+end
+
+function replace_in_expr!(expr, field_gen, ring_gens)
+    expr.head = replace_symbol(expr.head, field_gen, ring_gens)
+    for (i,v) in enumerate(expr.args)
+        if typeof(v) == Expr
+            replace_in_expr!(v,field_gen,ring_gens)
+        else
+            expr.args[i] = replace_symbol(v, field_gen, ring_gens)
+        end
+    end
+end
+
+function read_matrix_entry(desc, field, field_gen, ring_gens)
+    if typeof(desc) <: Integer
+        return field(desc)
+    elseif typeof(desc) <: AbstractVector
+        return sum(ring_gen * field(coeff) for (coeff,ring_gen) in zip(desc,ring_gens))
+    elseif typeof(desc) <: AbstractString
+        parsed = Meta.parse(desc)
+        replace_in_expr!(parsed, field_gen, ring_gens)
+        return eval(parsed)
+    end
+    @assert false "Couldn't parse entry" 
+end
+
+function read_lattice_json(desc::String)
+    
+    j = JSON.parse(desc)
+
+    (field,field_gen),ring_gens = JSON_field(j["field"])
+    matrix = vcat([Vector{nf_elem}(map(x -> field(read_matrix_entry(x,field,field_gen,ring_gens)),line))' for line in j["matrix"]]...) 
+    reflective = j["reflective"]
+    
+    if reflective
+        Coxeter_matrix = vcat([Vector{Int}(line)' for line in j["matrix"]]...)
+        return field,(field_gen,ring_gens),matrix,reflective, Coxeter_matrix
+    else
+        return field,(field_gen,ring_gens),matrix,reflective
+    end
+end
+
+function read_lattices_json_file(desc::AbstractString)
+    
+    jj = JSON.parsefile(desc)
+    lattices = []
+    for j in jj
+        (field,field_gen),ring_gens = JSON_field(j["field"])
+        matrix = vcat([Vector{nf_elem}(map(x -> field(read_matrix_entry(x,field,field_gen,ring_gens)),line))' for line in j["matrix"]]...) 
+        reflective = j["reflective"]
+        
+        if reflective
+            Coxeter_matrix = vcat([Vector{Int}(line)' for line in j["Coxeter matrix"]]...)
+            push!(lattices, (field,(field_gen,ring_gens),matrix,reflective, Coxeter_matrix))
+        else
+            push!(lattices, (field,(field_gen,ring_gens),matrix,reflective))
+        end
+    end
+    return lattices
+end
+
+

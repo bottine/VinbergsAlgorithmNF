@@ -9,7 +9,7 @@ module VinbergsAlgorithmNF
     import MathOptInterface
     import AbstractAlgebra
     import LinearAlgebra
-
+    import JSON
     
     # Copied from the ToggleableAsserts source
     module Options
