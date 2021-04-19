@@ -9,6 +9,21 @@ module Lat
     """
     function ⊕(M₁,M₂)
 
+        if typeof(M₁) <: Vector
+            @assert length(M₁) == 1
+            M₁ = Matrix(reshape(M₁,1,1))
+        end
+        if !(typeof(M₁) <: Matrix)
+            M₁ = Matrix(reshape([M₁],1,1))
+        end
+        if typeof(M₂) <: Vector
+            @assert length(M₂) == 1
+            M₂ = Matrix(reshape(M₂,1,1))
+        end
+        if !(typeof(M₂) <: Matrix)
+            M₂ = Matrix(reshape([M₂],1,1))
+        end
+
         n₁ = size(M₁)[1]
         n₂ = size(M₂)[1]
         @assert size(M₁) == (n₁,n₁)
