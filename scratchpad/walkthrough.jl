@@ -75,7 +75,7 @@ println("Are we finite volume? $status")
 display(out[1])
 
 # So, we need to call the algo again: we feed it the necessary "runtime" data:
-(status,out) = VA.next_n_roots(vd,out...,n=1)
+(status,out) = VA.next_n_roots!(vd,out...,n=1)
 println("Are we finite volume? $status")
 display(out[1])
 
@@ -92,9 +92,11 @@ cone_roots_Bugaenko8 = [
     [0, 0, 0, 0, 0, 0, 0, -1, 0], 
     [0, 0, 0, 0, 0, 0, 0, 0, -1]
 ]
+cone_roots_Bugaenko8 = [K.(r) for r in cone_roots_Bugaenko8] # need to force the coefficients to be in the field
 
 # If we know the cone roots, we can also provide them beforehand:
 (status,out) = VA.next_n_roots!(vd,cone_roots_Bugaenko8,n=1)
+# WARNING: `next_n_roots!` adds the new roots to the one it was fed (in this case `cone_roots_Bugaenko8`), so that now `cone_roots_Bugaenko8` contains more roots than before
 
 # WARNING: for now, I haven't implemented a way to feed the code an arbitrary sequence of roots, so if we want to stop the algo and resume it, we need to do it as above.
 #          thus, when providing cone roots, one need to be sure that they really are all the cone roots: nothing more, nothing less!
