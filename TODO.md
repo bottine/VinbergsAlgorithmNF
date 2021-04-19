@@ -35,6 +35,7 @@
 *	More examples to check good behaviour
 *	More asserts
 *	More non-diagonal lattices over bad fields
+*   Test random choices of basepoint → they should all end up with the same diagram
 
 # Theory
 
