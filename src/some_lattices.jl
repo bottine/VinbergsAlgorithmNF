@@ -30,13 +30,19 @@ module Lat
         end
     end
 
+    block_diag(M...) = reduce(⊕,M)  
+
     U() = [0 1; 1 0]
     A(n) = Matrix(LinearAlgebra.SymTridiagonal([2 for i in 1:n], [-1 for i in 1:n-1]))
     I(n) = Matrix(Int.(LinearAlgebra.I(n)))
     B(n) = begin
         @assert n ≥ 3
         M = A(n)
-        @assert false "TODO I'm not sure what the matrix should be!!"
+        M[end,end] = 1
+        M[end-1,end] = -1
+        M[end,end-1] = -1
+        return M
+        #@assert false "TODO I'm not sure what the matrix should be!!"
     end
     D(n) = begin
         @assert n≥4
@@ -86,11 +92,5 @@ module Lat
 
 
 end
-# Can't do this here: https://github.com/Nemocas/Nemo.jl/issues/810
-#Krat,arat = Hecke.rationals_as_number_field()
-#K2,a2 = Hecke.quadratic_field(2)
-#K5,a5 = Hecke.quadratic_field(5)
-
-#Bug8 = (a5-1) .* K5.(I_)  ⊕ K5.(gram_E8)
 
 

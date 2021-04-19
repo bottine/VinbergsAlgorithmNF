@@ -180,7 +180,7 @@ const LeastKByRootNormSquared = Dict{
 
 function enumerate_k(vd::VinbergData,l,k_min,k_max)
     
-    @info "enumerate_k (l=$l, k_min=$k_min, k_max=$k_max)"
+    @debug "enumerate_k (l=$l, k_min=$k_min, k_max=$k_max)"
 
     ring = vd.ring
     field = vd.field
@@ -219,7 +219,6 @@ function enumerate_k(vd::VinbergData,l,k_min,k_max)
         candidates,
     )
       
-    #@info "enumerate_k got $candidates"
     return candidates
 end
 
