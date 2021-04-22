@@ -1,6 +1,6 @@
 
 
-function diagonalize(ring,A::Matrix,v₀=nothing)
+function diagonalize(A::Matrix,v₀=nothing)
     # returns T and D with D = T'GT
     # algorithm copied from there https://math.stackexchange.com/questions/1388421/reference-for-linear-algebra-books-that-teach-reverse-hermite-method-for-symmetr
     # plus a gcd step to reduce the growth of values
@@ -13,8 +13,8 @@ function diagonalize(ring,A::Matrix,v₀=nothing)
     @assert n == m
 
     i0 = 1
-    I_ = ring.(collect(LinearAlgebra.I(n)))
-    M = ring.([A I_])
+    I_ = ZZ.(collect(LinearAlgebra.I(n)))
+    M = ZZ.([A I_])
 
     if v₀ ≠ nothing
         @assert v₀' * A * v₀ ≠ 0
@@ -51,7 +51,7 @@ function diagonalize(ring,A::Matrix,v₀=nothing)
        
       
         # look at non zero diagonal entries
-        non_zero_diag = [k for k in i0:n if M[k,k] ≠ ring(0)]
+        non_zero_diag = [k for k in i0:n if M[k,k] ≠ ZZ(0)]
 
     
         if length(non_zero_diag) == 0
@@ -69,9 +69,9 @@ function diagonalize(ring,A::Matrix,v₀=nothing)
             M[:,i0], M[:,k] = M[:,k], M[:,i0]
 
             for i in i0+1:n
-                g =  elem_gcd(ring,[M[i0,i0],M[i0,i]])
-                mizi = ring(M[i0,i].elem_in_nf//g.elem_in_nf)
-                miziz = ring(M[i0,i0].elem_in_nf//g.elem_in_nf)
+                g =  gcd([M[i0,i0],M[i0,i]])
+                mizi = ZZ(M[i0,i]//g)
+                miziz = ZZ(M[i0,i0]//g)
                 M[i,:] = (-mizi .* M[i0,:] + miziz .* M[i,:])
                 M[:,i] = (-mizi .* M[:,i0] + miziz .* M[:,i])
             end
@@ -87,26 +87,24 @@ function diagonalize(ring,A::Matrix,v₀=nothing)
 
     @assert LinearAlgebra.isdiag(D) "D is diagonal", D
     @assert P'*A*P == D "We have a diagonalization (part 1)"
-    #@assert A == inv(P')*D*inv(P) "We have a diagonalization (part 2)"
+    #@assert A == inv(QQ.(P'))*D*inv(QQ.(P)) "We have a diagonalization (part 2)"
     
-    return (D,P)
+    return (ZZ.(D),ZZ.(P))
 
 end
 
-function diagonalize_and_get_scaling(gram,ring,field,v₀=nothing)
+function diagonalize_and_get_scaling(gram,v₀=nothing)
 
     @assert LinearAlgebra.issymmetric(gram)
     n = size(gram)[1]
 
-    diagonal_values,diagonal_basis = diagonalize(ring,gram,v₀)
+    diagonal_values,diagonal_basis = diagonalize(gram,v₀)
     @assert LinearAlgebra.isdiag(diagonal_values)
    
     diagonal_basis_vecs = [[diagonal_basis[i,j] for i in 1:n] for j in 1:n]
 
-    inverse = Hecke.inv(matrix(field,field.(diagonal_basis)))
-    scaling = [abs(lcm_denominators(ring,[inverse[i,j] for j in 1:n])) for i in 1:n]
-    # clever scaling does not seem to work for now, TODO
-    #scaling = [abs(lcm_denominators(ring,inverse)) for i in 1:n]
+    inverse = Hecke.inv(matrix(QQ.(diagonal_basis)))
+    scaling = [abs(lcm([denominator(inverse[i,j]) for j in 1:n])) for i in 1:n]
     return diagonal_basis_vecs, LinearAlgebra.diag(diagonal_values), scaling 
 end
 
@@ -125,7 +123,6 @@ end
 ⇒(x::Bool,y::Bool) = !x || y
 ⇔(x::Bool,y::Bool) = (x && y) || (!x && !y)
 
-Base.copy(x::NfAbsOrdElem) = x # Otherwise Nemo throws errors on small matrices
 
 
 
@@ -134,8 +131,8 @@ function is_necessary_halfspace(gram,cone_roots,root)
    
     lp_precision = Options.lp_precision()
 
-    float_cone_roots_grammed = Vector{Vector{BigFloat}}([[approx(r,lp_precision) for r in gram*cone_root] for cone_root in cone_roots])    
-    float_root_grammed = Vector{BigFloat}([approx(r,lp_precision) for r in gram*root])
+    float_cone_roots_grammed = Vector{Vector{BigFloat}}([[BigFloat(r) for r in gram*cone_root] for cone_root in cone_roots])    
+    float_root_grammed = Vector{BigFloat}([BigFloat(r) for r in gram*root])
     
     
     n = length(root) 

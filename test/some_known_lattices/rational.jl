@@ -69,11 +69,10 @@ rational_lattices = [
 
 
 @testset "Some reflective lattices over ℚ" begin
-    K,a = Hecke.rationals_as_number_field()
     
     for (name,matrix,known_roots) in rational_lattices
         @testset "$name" begin
-            compare_vinberg_outputs(K,matrix,known_roots)
+            compare_vinberg_outputs(matrix,known_roots)
         end
     end
 
