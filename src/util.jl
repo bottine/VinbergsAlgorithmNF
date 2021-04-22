@@ -129,10 +129,8 @@ end
 # TODO: make exact
 function is_necessary_halfspace(gram,cone_roots,root) 
    
-    lp_precision = Options.lp_precision()
-
-    float_cone_roots_grammed = Vector{Vector{BigFloat}}([[BigFloat(r) for r in gram*cone_root] for cone_root in cone_roots])    
-    float_root_grammed = Vector{BigFloat}([BigFloat(r) for r in gram*root])
+    float_cone_roots_grammed = Vector{Vector{Float64}}([[Float64(r) for r in gram*cone_root] for cone_root in cone_roots])    
+    float_root_grammed = Vector{Float64}([Float64(r) for r in gram*root])
     
     
     n = length(root) 
@@ -142,17 +140,17 @@ function is_necessary_halfspace(gram,cone_roots,root)
 
     #x = Variable(n, IntVar)
     x = Variable(n)
-    p = maximize(big(0), numeric_type=BigFloat)       # satisfiability question 
+    p = maximize(0)       # satisfiability question 
     for float_cone_root_grammed in float_cone_roots_grammed
-        p.constraints += x' * float_cone_root_grammed ≤ big(0) # + big(2)^(-256) # hyperplanes defining the cone
+        p.constraints += x' * float_cone_root_grammed ≤ 0 # + big(2)^(-256) # hyperplanes defining the cone
     end
-    p.constraints += x' * float_root_grammed ≥ big(1) # other side of the half space defined by root
+    p.constraints += x' * float_root_grammed ≥ 1 # other side of the half space defined by root
     # it should only be strictly bigger than zero, but Convex.jl does not do "strictly", so we change it to ≥ 1 (and since we have a cone, it should be the same result)
 
     
     #Convex.solve!(p,Cbc.Optimizer(verbose=0,loglevel=0), verbose=false, warmstart=false)
     #Convex.solve!(p,COSMO.Optimizer(verbose=false), verbose=false, warmstart=false)
-    Convex.solve!(p,Tulip.Optimizer{BigFloat}(), verbose=false)
+    Convex.solve!(p,Tulip.Optimizer{Float64}(), verbose=false)
    
 
     if p.status == MathOptInterface.INFEASIBLE

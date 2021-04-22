@@ -333,6 +333,7 @@ function _extend_root_stem!(
     j = stem_length + 1 
     
     if clearly_inconsistent(constraints,j,vd.dim)
+        println("clearly inconsistent")
         return
     end
     
@@ -378,14 +379,15 @@ function _extend_root_stem!(
     #       l | 2kα  
     #    ⇔  2kα/l ∈ ring  
     #    ⇔  sk (2α//ls) ∈ ring 
-    #    ⇔  sk (two_α_over_ls) ∈ ring 
-    crystal(sk) = isinteger(sk * (two_α_over_ls))
+    #    ⇔  sk (two_α_over_ls) ∈ ring
+    crystal(k) = divides(l,2*k*α_j)
 
     integral(a_stem_can_rep) = all(isinteger(a_stem_can_rep[idx]) for idx in vd.diago_vector_last_on_coordinates[j])
 
     
     interval_αk = exact_interval_for_k_j(constraints,j) 
     if is_empty(interval_αk) == ∅
+        println("empty interval")
         return 
     end
 
@@ -393,31 +395,41 @@ function _extend_root_stem!(
     stem_can_rep_updated = deepcopy(stem_can_rep) #copy(stem_can_rep)
 
 
-    pos = true
-    neg = true
-    for sk in 0:isqrt(max(0,ceil(fmpz,l_j*s_j^2)))+1
+    k = fmpq(0)
+    while k^2 ≤ l_j//α_j
         
+        #= 
+        if j == vd.dim
+            println("-------------------------------")
+            println("l = $l")
+            println("l_j = $l_j")
+            println()
+        end
+        =#
 
-        if  crystal(sk) 
+        if  crystal(k) && ((j == vd.dim) ⇒ (k^2 == l_j//α_j)) 
             
-            k = sk // s_j
-            if pos 
+            kα_j = k*α_j
+            if in_interval(kα_j,interval_αk)
                 stem_updated = copy!(stem_updated,stem); stem_updated[j] = k
                 stem_can_rep_updated = [stem_can_rep[i] + k * (v_j[i]) for i in 1:vd.dim]
                 if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                    _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,root_length_idx,l,l_j - k^2*(α_j),update_constraints(constraints,j,k*α_j),roots)
+                    _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,root_length_idx,l,l_j - k^2*(α_j),update_constraints(constraints,j,kα_j),roots)
                 end
             end
-            if neg && (k)≠0 
+            if in_interval(-kα_j,interval_αk) && (k)≠0 
                 stem_updated = copy!(stem_updated,stem); stem_updated[j] = -k
                 stem_can_rep_updated = [stem_can_rep[i] - k * (v_j[i]) for i in 1:vd.dim]
                 if integral(stem_can_rep_updated) # all((stem_can_rep_updated[idx] ∈ ring) for idx in vd.diago_vector_last_on_coordinates[j]) # integral
-                    _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,root_length_idx,l,l_j - (k)^2*(α_j),update_constraints(constraints,j,-k*α_j),roots)
+                    _extend_root_stem!(vd,stem_updated,stem_can_rep_updated,j,root_length_idx,l,l_j - (k)^2*(α_j),update_constraints(constraints,j,-kα_j),roots)
                 end
             end
 
+        else
+            # nothing to see here
         end
-
+        
+        k += 1//s_j
     end
     
 
