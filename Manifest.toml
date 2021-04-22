@@ -100,7 +100,7 @@ version = "0.14.5"
 
 [[CoxeterDiagrams]]
 deps = ["Debugger", "LightGraphs", "LinearAlgebra", "Memoize", "StaticArrays"]
-git-tree-sha1 = "fde0610a060a42f982c1ebdd5959cb8845bf0d09"
+git-tree-sha1 = "60eb2da8d54be03b96b1b2d661e97420e5f430e6"
 repo-rev = "master"
 repo-url = "https://github.com/bottine/CoxeterDiagrams"
 uuid = "031067e9-6044-4365-9518-ddaf8d94f8f1"
@@ -235,9 +235,9 @@ version = "0.3.3"
 
 [[JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "00f19427a78eb2d24edbd0da979171c8715dcd05"
+git-tree-sha1 = "d77a7167d45a8e339e96916e0e9d181c5f68277d"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.8.13"
+version = "0.8.14"
 
 [[LDLFactorizations]]
 deps = ["AMD", "LinearAlgebra", "SparseArrays", "Test"]
@@ -453,9 +453,9 @@ uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "2f01a51c23eed210ff4a1be102c4cc8236b66e5b"
+git-tree-sha1 = "e8cd1b100d37f5b4cfd2c83f45becf61c762eaf7"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.1.0"
+version = "1.1.1"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
