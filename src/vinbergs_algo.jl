@@ -585,7 +585,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10)
         end
 
 
-        if is_finite_volume(das)
+        if CoxeterDiagrams.is_finite_volume(das)
             # Sanity checks
             @assert all(is_root(vd.gram_matrix,r) for r in roots)
             @assert all(times(vd,r₁,r₂)≤0 for r₁ in roots for r₂ in roots if r₁≠r₂)
@@ -615,7 +615,7 @@ function next_n_roots!(
     @assert all(fake_dist_to_basepoint(vd,r) == 0 for r in prev_roots) "Only works with previous roots == cone roots"
 
     Cox_matrix = Coxeter_matrix(vd.gram_matrix, prev_roots) 
-    das = build_diagram_and_subs(Cox_matrix,vd.dim-1)
+    das = CoxeterDiagrams.DiagramAndSubs(Cox_matrix,vd.dim-1)
     dict = init_least_k_by_root_norm_squared(vd)
     
     return next_n_roots!(vd,prev_roots,dict,das;n=n)
