@@ -100,7 +100,7 @@ version = "0.14.5"
 
 [[CoxeterDiagrams]]
 deps = ["Debugger", "LightGraphs", "LinearAlgebra", "Memoize", "ResumableFunctions", "StaticArrays"]
-git-tree-sha1 = "182d276a96efc48685bf62ebfa98322a767035cf"
+git-tree-sha1 = "4c6eba97f10e29456f9f8008efe76880ba40127f"
 repo-rev = "master"
 repo-url = "https://github.com/bottine/CoxeterDiagrams"
 uuid = "031067e9-6044-4365-9518-ddaf8d94f8f1"

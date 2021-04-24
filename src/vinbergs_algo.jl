@@ -276,7 +276,7 @@ end
 
     @toggled_assert stem_can_rep == to_can_rep(vd,stem) "Sanity check. `stem_can_rep` must always be equal to `to_can_rep(vd,stem)`!"
     
-    times(vd,stem_can_rep,stem_can_rep) == l || return
+    @toggled_assert times(vd,stem_can_rep,stem_can_rep) == l
 
     if !all(bound ≥ 0 for bound in c_values)
         return 
@@ -394,6 +394,11 @@ function _extend_root_stem!(
     stem_updated = deepcopy(stem)
     stem_can_rep_updated = deepcopy(stem_can_rep) #copy(stem_can_rep)
 
+    
+    step1 = l//(2α_j)
+    step2 = 1//s_j
+    C = denominator(step1) * denominator(step2)
+    step = lcm(ZZ(step1*C),ZZ(step2*C))//C
 
     k = fmpq(0)
     while k^2 ≤ l_j//α_j
@@ -406,8 +411,8 @@ function _extend_root_stem!(
             println()
         end
         =#
-
-        if  crystal(k) && ((j == vd.dim) ⇒ (k^2 == l_j//α_j)) 
+        #@assert crystal(k)
+        if ((j == vd.dim) ⇒ (k^2 == l_j//α_j)) 
             
             kα_j = k*α_j
             if in_interval(kα_j,interval_αk)
@@ -429,7 +434,7 @@ function _extend_root_stem!(
             # nothing to see here
         end
         
-        k += 1//s_j
+        k += step #1//s_j
     end
     
 
