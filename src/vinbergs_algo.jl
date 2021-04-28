@@ -934,7 +934,7 @@ function next_n_roots!(
     @assert all(fake_dist_to_basepoint(vd,r) == 0 for r in prev_roots) "Only works with previous roots == cone roots"
 
     Cox_matrix = Coxeter_matrix(vd.quad_space, vd.ring, prev_roots) 
-    das = build_diagram_and_subs(Cox_matrix,vd.dim-1)
+    das = DiagramAndSubs(Cox_matrix,vd.dim-1)
     dict = init_least_k_by_root_norm_squared(vd)
     
     return next_n_roots!(vd,prev_roots,dict,das;n=n,t2_cache=t2_cache)
