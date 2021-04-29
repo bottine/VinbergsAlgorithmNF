@@ -798,20 +798,20 @@ function cone_roots(vd,roots_at_distance_zero)
 
 
     for r in roots_at_distance_zero
-        @debug "looking at $r"
         if  all((-1)*r ≠ cr for cr in cone_roots)
-            @debug "so far so good"
             if is_necessary_halfspace(vd.gram_matrix.entries,cone_roots,-r)
-                @debug "degeneration"
                 push!(cone_roots,r)
             end
         
         end
-        @debug "have $(length(cone_roots)) cone roots" 
     end
-    
+   
     cone_roots = drop_redundant_halfspaces(vd.gram_matrix.entries,cone_roots)
     @assert all(times(vd,r₁,r₂) ≤ 0 for r₁ in cone_roots for r₂ in cone_roots if r₁≠r₂)
+
+    for r in roots_at_distance_zero
+        @toggled_assert !is_necessary_halfspace(vd.gram_matrix.entries, cone_roots,r) || !is_necessary_halfspace(vd.gram_matrix.entries, cone_roots,-r)
+    end
 
     for r in cone_roots
         @info r

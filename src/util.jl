@@ -136,8 +136,7 @@ function is_necessary_halfspace(gram,cone_roots,root)
 
     float_cone_roots_grammed = Vector{Vector{BigFloat}}([[approx(r,lp_precision) for r in gram*cone_root] for cone_root in cone_roots])    
     float_root_grammed = Vector{BigFloat}([approx(r,lp_precision) for r in gram*root])
-    
-    
+
     n = length(root) 
 
     # x' * (A * r) ≤ 0 ∀ r
@@ -161,7 +160,6 @@ function is_necessary_halfspace(gram,cone_roots,root)
     if p.status == MathOptInterface.INFEASIBLE
         return false
     elseif p.status == MathOptInterface.OPTIMAL
-        #println(p.optval)
         return true
     else
         @error "LP program couldn't decide feasibility."
@@ -177,7 +175,7 @@ function drop_redundant_halfspaces(
     roots
 ) 
     
-    for i in length(roots):-1:1
+    for i in 1:length(roots)
        
         rr = copy(roots)
         r = popat!(rr,i)
