@@ -837,7 +837,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
     if !all(all_zero_on_coord_after(vd,1,idx) ⇒ (k*ex((vd.diagonal_basis[1][idx])) ∈ vd.ring) for idx in 1:vd.dim)
         @info "$k would define non-integral coordinates ⇒ dropping it"
-        return [] 
+        return Vector{nf_elem}[] 
     end
     ######################
     
