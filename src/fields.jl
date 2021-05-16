@@ -41,7 +41,7 @@ Base.abs(x) = x<0 ? -x : x
 
 
 function ideal_gcd(ring,elems)
-    idls = [ideal(ring,ring(e)) for e in elems]
+    idls = [ideal(ring,ring(e,false)) for e in elems]
     gcd_idls = reduce(gcd,idls)
     return gcd_idls
 end
@@ -54,7 +54,7 @@ function elem_gcd(ring,elems)
 end
 
 function ideal_lcm(ring,elems)
-    idls = [ideal(ring,ring(e)) for e in elems]
+    idls = [ideal(ring,ring(e,false)) for e in elems]
     lcm_idls = reduce(lcm,idls)
     return lcm_idls
 end
@@ -88,22 +88,7 @@ function short_t2_elems(O::NfAbsOrd, lb, ub)
 
 
     lat = Hecke.short_vectors(Zlattice(gram = trace), lb, ub)
-    
-    for (v,t) in lat
-        elem = Hecke.dot(basis,v)
-        try 
-            x = O(elem,false)
-        catch e
-            println(O)
-            println(trace)
-            println(basis)
-            println(v)
-            println(elem)
-            println(e)
-            @assert false
-        end
-    end
-    candidates = [(O(Hecke.dot(basis,v),false),t) for (v,t) in lat]
+    candidates = [((Hecke.dot(basis,v)).elem_in_nf,t) for (v,t) in lat]
 
     @toggled_assert all(t2_exact(c)==t for (c,t) in candidates)
     @toggled_assert all(lb-1 ≤ t2(c) && t2(c) ≤ ub+1 for (c,t) in candidates)
@@ -113,7 +98,7 @@ end
 function non_neg_short_t2_elems(O::NfAbsOrd, lb, ub)
     candidates = short_t2_elems(O,lb,ub)
     if lb ≤ 0
-        push!(candidates,(O(0),fmpq(0)))
+        push!(candidates,(nf(O)(0),fmpq(0)))
     end
     
     return map(v -> (abs(v[1]),v[2]), candidates)

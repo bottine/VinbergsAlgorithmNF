@@ -322,10 +322,10 @@ function bounded_t2_elems!(
                 non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
             )
             @toggled_assert all(x≥0 for (x,t) in new_elems)
-            @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
+            @toggled_assert all(all(x[1] ≠ y[1] for y in cache.elems[end]) for x in new_elems)
             
             # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
-            new_elems_nf = map(x -> (box(x[1].elem_in_nf),get_enclosing_intervals_float64(x[1].elem_in_nf),x[2],crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
+            new_elems_nf = map(x -> (box(x[1]),get_enclosing_intervals_float64(x[1]),x[2],crystal_matrix(vd,x[1])), new_elems)
             sort!(new_elems_nf,by=(x->lo(x[1])))
             sort!(new_elems_nf,by=(x->ex(x[1])))
             push!(cache.elems, new_elems_nf)
@@ -691,7 +691,10 @@ function _extend_root_stem!(
     stem_can_rep_updated = deepcopy(stem_can_rep) #copy(stem_can_rep)
 
     last_coordinate = j == vd.dim
-    for (idx,ordered) in enumerate(last_coordinate ? (t2_cache.elems[last_bounded_t2_candidates_vector_idx:last_bounded_t2_candidates_vector_idx]) : (t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]) )
+    dd = lock(t2_cache.lock) do
+        enumerate(last_coordinate ? (t2_cache.elems[last_bounded_t2_candidates_vector_idx:last_bounded_t2_candidates_vector_idx]) : (t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]) )
+    end
+    for (idx,ordered) in dd#enumerate(last_coordinate ? (t2_cache.elems[last_bounded_t2_candidates_vector_idx:last_bounded_t2_candidates_vector_idx]) : (t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]) )
        
         @toggled_assert issorted(ordered,by=x->ex(x[1]))
         isempty(ordered) && continue
@@ -842,7 +845,7 @@ function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     all_zero_on_coord_after(vd,vector_idx,coord_idx) = all(vd.diagonal_basis[l][coord_idx] == 0 for l in vector_idx+1:vd.dim)
     if !all(all_zero_on_coord_after(vd,1,idx) ⇒ (k*ex((vd.diagonal_basis[1][idx])) ∈ vd.ring) for idx in 1:vd.dim)
         @info "$k would define non-integral coordinates ⇒ dropping it"
-        return [] 
+        return Vector{nf_elem}[] 
     end
     ######################
     
@@ -885,7 +888,7 @@ end
 function roots_for_next_pairs!(vd,dict,prev_roots;t2_cache=nothing)
    
     nthreads = Threads.nthreads()
-    #nthreads = 1
+    nthreads = 2
     pairs = [next_min_pair!(vd,dict) for _ in 1:nthreads]
     rootss = [Vector{nf_elem}[] for _ in 1:nthreads]
     Threads.@threads for (i,pair) in collect(enumerate(pairs))
