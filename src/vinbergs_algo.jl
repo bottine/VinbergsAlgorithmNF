@@ -283,6 +283,7 @@ end
 
 
 mutable struct BoundedT2ElemsCache
+    lock::ReentrantLock
     bounds::Vector{Int}
     elems::Vector{Vector{Tuple{
                                boxed_nf_elem,
@@ -296,7 +297,7 @@ end
 
 function BoundedT2ElemsCache(vd::VinbergData)
     field = vd.field
-    return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{boxed_nf_elem,Vector{Interval{Float64}},fmpq,BitMatrix}}}([[(box(field(0)),get_enclosing_intervals_float64(field(0)),fmpq(0),crystal_matrix(vd,field(0)))]]))
+    return BoundedT2ElemsCache(ReentrantLock(),Vector{Int}([0]),Vector{Vector{Tuple{boxed_nf_elem,Vector{Interval{Float64}},fmpq,BitMatrix}}}([[(box(field(0)),get_enclosing_intervals_float64(field(0)),fmpq(0),crystal_matrix(vd,field(0)))]]))
 end
 
 function crystal_matrix(vd::VinbergData,sk)
@@ -313,20 +314,22 @@ function bounded_t2_elems!(
 
     int_bound = ceil(t2_bound)
     if int_bound > cache.bounds[end]
-        with_margin = ceil(int_bound*1.2)
-        push!(cache.bounds,with_margin)
-        new_elems = filter( # could probably me optimized to not have to filter away
-            x -> all(x[2] ≠ cache.bounds[end-1]),
-            non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
-        )
-        @toggled_assert all(x≥0 for (x,t) in new_elems)
-        @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
-        
-        # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
-        new_elems_nf = map(x -> (box(x[1].elem_in_nf),get_enclosing_intervals_float64(x[1].elem_in_nf),x[2],crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
-        sort!(new_elems_nf,by=(x->lo(x[1])))
-        sort!(new_elems_nf,by=(x->ex(x[1])))
-        push!(cache.elems, new_elems_nf)
+        lock(cache.lock) do
+            with_margin = ceil(int_bound*1.2)
+            push!(cache.bounds,with_margin)
+            new_elems = filter( # could probably me optimized to not have to filter away
+                x -> all(x[2] ≠ cache.bounds[end-1]),
+                non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
+            )
+            @toggled_assert all(x≥0 for (x,t) in new_elems)
+            @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
+            
+            # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
+            new_elems_nf = map(x -> (box(x[1].elem_in_nf),get_enclosing_intervals_float64(x[1].elem_in_nf),x[2],crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
+            sort!(new_elems_nf,by=(x->lo(x[1])))
+            sort!(new_elems_nf,by=(x->ex(x[1])))
+            push!(cache.elems, new_elems_nf)
+        end
     end
     
     return searchsortedfirst(cache.bounds,t2_bound)
@@ -688,7 +691,7 @@ function _extend_root_stem!(
     stem_can_rep_updated = deepcopy(stem_can_rep) #copy(stem_can_rep)
 
     last_coordinate = j == vd.dim
-    for (idx,ordered) in enumerate(last_coordinate ? t2_cache.elems[last_bounded_t2_candidates_vector_idx:last_bounded_t2_candidates_vector_idx] : t2_cache.elems[1:last_bounded_t2_candidates_vector_idx] )
+    for (idx,ordered) in enumerate(last_coordinate ? (t2_cache.elems[last_bounded_t2_candidates_vector_idx:last_bounded_t2_candidates_vector_idx]) : (t2_cache.elems[1:last_bounded_t2_candidates_vector_idx]) )
        
         @toggled_assert issorted(ordered,by=x->ex(x[1]))
         isempty(ordered) && continue
@@ -826,6 +829,8 @@ end
 
 function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     
+    @info "roots_for_pair(vd,$pair,$(length(prev_roots)))"
+
     if t2_cache === nothing
         t2_cache = BoundedT2ElemsCache(vd) 
     end
@@ -877,6 +882,27 @@ function roots_for_next_pair!(vd,dict,prev_roots;t2_cache=nothing)
 
 end
 
+function roots_for_next_pairs!(vd,dict,prev_roots;t2_cache=nothing)
+   
+    nthreads = Threads.nthreads()
+    #nthreads = 1
+    pairs = [next_min_pair!(vd,dict) for _ in 1:nthreads]
+    rootss = [Vector{nf_elem}[] for _ in 1:nthreads]
+    Threads.@threads for (i,pair) in collect(enumerate(pairs))
+        (k,l) = pair
+        fake_dist = -(k^2)*ex(vd.diagonal_values[1])//ex(l)
+        @info "[$i]next pair is $(k),$(ex(l)) (fake_dist is $fake_dist ≈ $(approx(fake_dist,8)))"
+        rootss[i] = roots_for_pair(vd,pair,prev_roots,t2_cache=t2_cache)
+    end
+    
+    cumulative_roots = rootss[1]
+    for i in 2:nthreads
+        filter!(r₁ -> all(times(vd,r₁,r₂)≤0 for r₂ in cumulative_roots),rootss[i])
+        append!(cumulative_roots,rootss[i])
+    end
+    return cumulative_roots
+end
+
 function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
 
     if t2_cache===nothing
@@ -893,7 +919,7 @@ function next_n_roots!(vd,prev_roots,dict,das;n=10,t2_cache=nothing)
     while n > 0 
 
 
-        new_roots = roots_for_next_pair!(vd,dict,roots;t2_cache=t2_cache)
+        new_roots = roots_for_next_pairs!(vd,dict,roots;t2_cache=t2_cache)
         n = n - length(new_roots)
 
         for root in new_roots 

@@ -81,14 +81,29 @@ end
 
 function short_t2_elems(O::NfAbsOrd, lb, ub)
     
-
     @toggled_assert istotally_real(nf(O))
 
     trace = Hecke.trace_matrix(O)
     basis = Hecke.basis(O)
 
+
     lat = Hecke.short_vectors(Zlattice(gram = trace), lb, ub)
-    candidates = [(O(Hecke.dot(basis,v)),t) for (v,t) in lat]
+    
+    for (v,t) in lat
+        elem = Hecke.dot(basis,v)
+        try 
+            x = O(elem,false)
+        catch e
+            println(O)
+            println(trace)
+            println(basis)
+            println(v)
+            println(elem)
+            println(e)
+            @assert false
+        end
+    end
+    candidates = [(O(Hecke.dot(basis,v),false),t) for (v,t) in lat]
 
     @toggled_assert all(t2_exact(c)==t for (c,t) in candidates)
     @toggled_assert all(lb-1 ≤ t2(c) && t2(c) ≤ ub+1 for (c,t) in candidates)
