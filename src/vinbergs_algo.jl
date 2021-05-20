@@ -320,10 +320,10 @@ function bounded_t2_elems!(
             non_neg_short_t2_elems(ring,cache.bounds[end-1],cache.bounds[end]),# .|> abs,
         )
         @toggled_assert all(x≥0 for (x,t) in new_elems)
-        @toggled_assert all(all(x[1].elem_in_nf ≠ y[1] for y in cache.elems[end]) for x in new_elems)
+        @toggled_assert all(all(x[1] ≠ y[1] for y in cache.elems[end]) for x in new_elems)
         
         # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
-        new_elems_nf = map(x -> (box(x[1].elem_in_nf),get_enclosing_intervals_float64(x[1].elem_in_nf),x[2],crystal_matrix(vd,x[1].elem_in_nf)), new_elems)
+        new_elems_nf = map(x -> (box(x[1]),get_enclosing_intervals_float64(x[1]),x[2],crystal_matrix(vd,x[1])), new_elems)
         sort!(new_elems_nf,by=(x->lo(x[1])))
         sort!(new_elems_nf,by=(x->ex(x[1])))
         push!(cache.elems, new_elems_nf)

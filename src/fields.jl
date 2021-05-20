@@ -79,6 +79,15 @@ function t2_exact(x::NfAbsOrdElem)
   return t2_exact(x.elem_in_nf)
 end
 
+# thanks Tommy Hofmann
+function dot(basis::Vector{NfOrdElem},coefficients::Vector{Int64},tmp::nf_elem,dest=basis[1].parent.nf(0))
+    for (b,c) in zip(basis,coefficients)
+        mul!(tmp,b.elem_in_nf,c)
+        add!(dest,dest,tmp)
+    end
+    return dest
+end
+
 function short_t2_elems(O::NfAbsOrd, lb, ub)
     
 
@@ -86,19 +95,22 @@ function short_t2_elems(O::NfAbsOrd, lb, ub)
 
     trace = Hecke.trace_matrix(O)
     basis = Hecke.basis(O)
-
+    
+    tmp = O.nf(0)
     lat = Hecke.short_vectors(Zlattice(gram = trace), lb, ub)
-    candidates = [(O(Hecke.dot(basis,v)),t) for (v,t) in lat]
+    candidates = [(VinbergsAlgorithmNF.dot(basis,v,tmp),t) for (v,t) in lat]
 
     @toggled_assert all(t2_exact(c)==t for (c,t) in candidates)
     @toggled_assert all(lb-1 ≤ t2(c) && t2(c) ≤ ub+1 for (c,t) in candidates)
     return candidates
 end
 
+
+
 function non_neg_short_t2_elems(O::NfAbsOrd, lb, ub)
     candidates = short_t2_elems(O,lb,ub)
     if lb ≤ 0
-        push!(candidates,(O(0),fmpq(0)))
+        push!(candidates,(O.nf(0),fmpq(0)))
     end
     
     return map(v -> (abs(v[1]),v[2]), candidates)
