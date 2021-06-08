@@ -3,6 +3,10 @@
 
     Check that the quadratic form defined by the matrix `matrix` has signature ``(n,1)`` and that all its (non-trivial) Galois conjugates have signature ``(n+1,0)`` (Equivalently, all are definite, the original is hyperbolic and the (non-trivial) conjugates are positive definite).
 """
+function is_feasible(field,mat)
+    is_feasible(Hecke.quadratic_space(field,matrix(field,mat)))
+end
+
 function is_feasible(V::Hecke.QuadSpace)
     
     P = infinite_places(V.K)
