@@ -6,6 +6,7 @@ module VinbergsAlgorithmNF
     using IntervalArithmetic
     using Convex, Tulip
     using LightGraphs
+    using Combinatorics
 
     import MathOptInterface
     import AbstractAlgebra

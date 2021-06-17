@@ -1,10 +1,11 @@
 function inf_ord_sym2(vd,roots,das)
     
-    candidates = filter(x -> length(Set(x))==vd.dim, Base.product([roots for i in 1:vd.dim]...) |> collect)
+    candidates = Combinatorics.powerset(roots) |> collect
+    
 
     # candidate sets of vectors basis R^{n+1}
     filter!(
-        x->det(x)≠0,
+        x->det(matrix(vcat(x...)))≠0,
         candidates
     )
 
@@ -94,9 +95,9 @@ function pairing_to_matrix(vd,vr1,vr2,pairing)
     @assert issorted([p[1] for p in pairing])
 
 
-    m1 = reduce(vcat,vr1)
+    m1 = matrix(vcat(vr1...))
     display(m1)
-    m2 = reduce(vcat,vr2[[p[2] for p in pairing]])
+    m2 = matrix(vcat(vr2[[p[2] for p in pairing]]...))
 
     return m1 * inv(m2)
 
