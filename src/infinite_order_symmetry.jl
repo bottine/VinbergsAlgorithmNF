@@ -1,42 +1,50 @@
 function inf_ord_sym2(vd,roots,das)
     
-    candidates = Combinatorics.powerset(roots) |> collect
-    
+    candidates = Combinatorics.powerset(roots,vd.dim,vd.dim) |> collect
+   
+    #display(candidates)
 
     # candidate sets of vectors basis R^{n+1}
     filter!(
-        x->det(matrix(vcat(x...)))≠0,
+        x->isinvertible(matrix(vd.field,hcat(x...))),
         candidates
     )
 
-    display(candidates[1])
-
-    for c1 in candidates, c2 in candidates
-
-        transfos = pairings(vd,c1,c2)  
+    for pair in Combinatorics.powerset(candidates,1,2)
         
+        c1 = pair[1]
+        c2 = length(pair) == 2 ? pair[2] : pair[1]
+
+        # check that c1 and c2 don't share all vectors?
+
+        transfos = pairings(vd,c1,c2) 
         for t in transfos
             
-            if is_integral(vd,t)
-                # Here means: t is invertible of inverse s with is_integral(vd,s) holding
-                # and t preserves the form since t sends c1 to c2 and preserve the Gram matrices
-
-                if any(abs(t) ≠1 for t in eigen(t))
-                    display(c1)
-                    display(c2)
-                    display(t)
-                    println("------------------------") 
-                end
+            if is_integral(vd,t) && t≠t^2 # t≠t^2 is a stupid shortcut to check that t is not the identity
+                s = inv(t)
+                @assert is_integral(vd,s)
+                @assert preserve_the_form(vd,t)
                 
+                # Thanks Tommy Hofmann
+                L = splitting_field(minpoly(t))
+                tt = change_base_ring(L, t)
+                jnf_tt, change = jordan_normal_form(tt)
+                if !isdiagonal(jnf_tt)
+                    display(jnf_tt) # not diagonal => t is not diagonalizable => infinite order
+                end
+
+            else
             end
-
-
         end
-
     end
 
 end
 
+function fixed_points_intersection(vd,tt)
+    I_ = matrix(vd.field,LinearAlgebra.I(vd.dim))
+    n,N = nullspace(vcat([t-I_ for t in tt]))
+    return n,N
+end
 
 function infinite_order_symmetry(vd,roots,das)
     # Assume that we're not working in ℚ: so the vertices are never ideal vertices
@@ -82,7 +90,7 @@ function pairings(vd,vr1,vr2)
     vc_rel(v1,v2) = cv1[v1] == cv2[v2]
 
     pairings =  LightGraphs.Experimental.all_isomorph(g1,g2, LightGraphs.Experimental.VF2(),edge_relation=ec_rel,vertex_relation=vc_rel)
-
+    
     matrices = [pairing_to_matrix(vd,vr1,vr2,p) for p in pairings]
     
     return matrices
@@ -92,12 +100,8 @@ end
 
 function pairing_to_matrix(vd,vr1,vr2,pairing)
 
-    @assert issorted([p[1] for p in pairing])
-
-
-    m1 = matrix(vcat(vr1...))
-    display(m1)
-    m2 = matrix(vcat(vr2[[p[2] for p in pairing]]...))
+    m1 = matrix(vd.field,hcat(vr1[[p[1] for p in pairing]]...))
+    m2 = matrix(vd.field,hcat(vr2[[p[2] for p in pairing]]...))
 
     return m1 * inv(m2)
 
@@ -108,7 +112,7 @@ function is_integral(vd,mat)
 end
 
 function preserve_the_form(vd,mat)
-    mat * vd.gram * mat' == vd.gram
+    mat' * vd.gram_matrix * mat == vd.gram_matrix
 end
 
 function is_integrally_inversible(vd,mat)
