@@ -5,6 +5,7 @@ module VinbergsAlgorithmNF
     using CoxeterDiagrams
     using IntervalArithmetic
     using Convex, Tulip
+    using LightGraphs
 
     import MathOptInterface
     import AbstractAlgebra
@@ -51,6 +52,7 @@ module VinbergsAlgorithmNF
     include("quad_forms.jl")
     include("vinbergs_algo.jl")
     include("some_lattices.jl")
+    include("infinite_order_symmetry.jl")
 
     export VinbergData,roots_at_distance_zero,cone_roots
 
