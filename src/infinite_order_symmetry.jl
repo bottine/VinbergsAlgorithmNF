@@ -8,7 +8,7 @@ function inf_ord_sym2(vd,roots,das)
 
     # candidate sets of vectors basis R^{n+1}
     filter!(
-            x->isinvertible(matrix(vd.field,hcat([y[2] for y in x]...))),
+        x->isinvertible(matrix(vd.field,hcat([y[2] for y in x]...))),
         candidates
     )
 
@@ -23,7 +23,6 @@ function inf_ord_sym2(vd,roots,das)
 
         transfos = pairings(vd,c1,c2) 
         
-        println("Number of transfos : $(length(transfos))")
         for (labels,t) in transfos
             
             if is_integral(vd,t) && t≠t^2 # t≠t^2 is a stupid shortcut to check that t is not the identity
@@ -38,17 +37,19 @@ function inf_ord_sym2(vd,roots,das)
                     gram_fixed_t = [c' * vd.gram_matrix.entries * d for c in eachcol(fixed_t.entries), d in eachcol(fixed_t.entries)]
                     d,p = diagonalize_in_field(vd.field,gram_fixed_t)
                     #display(d)
-                    if any(d[i,i]< 0 for i in 1:vd.dim)
+                    if any(d[i,i]< 0 for i in 1:size(d)[1])
                         #println("has fixed point")
                     else
                         println("no fixed point in H")
                         display(labels)
+                        return true
                     end
 
                 else
                     # the rank of the fixed point set is null: no fixed point!
                     println("no fixed point at all")
                     display(labels)
+                    return true
                 end
 
 
@@ -57,6 +58,7 @@ function inf_ord_sym2(vd,roots,das)
         end
     end
 
+    return false
 end
 
 function infinite_order_symmetry(vd,roots,das)

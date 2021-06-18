@@ -74,6 +74,7 @@ rational_lattices = [
     for (name,matrix,known_roots) in rational_lattices
         @testset "$name" begin
             compare_vinberg_outputs(K,matrix,known_roots)
+            no_infinite_order_symmetry(K,matrix,known_roots)
         end
     end
 

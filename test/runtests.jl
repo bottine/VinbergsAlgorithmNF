@@ -26,6 +26,12 @@ function compare_vinberg_outputs(K,matrix,known_roots)
     @test CoxeterDiagrams.is_isom(VA.Coxeter_matrix(vd,roots_found),VA.Coxeter_matrix(vd,known_roots))
 end
 
+function no_infinite_order_symmetry(K,matrix,known_roots)
+    vd = VA.VinbergData(K,matrix)
+    (status,(roots_found,dict,das)) = VA.next_n_roots!(vd,n=length(known_roots))
+    @test !VA.inf_ord_sym2(vd,roots,das) 
+end
+
 @testset "U n i t t e s t s (notreally)" begin
     include("unit/util.jl")
     include("unit/vinbergs_algo.jl")
