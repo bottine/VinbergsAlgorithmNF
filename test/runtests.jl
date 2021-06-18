@@ -37,6 +37,10 @@ end
     include("unit/vinbergs_algo.jl")
 end
 
+@testset "Infinite order symmetries" begin
+    include("infinite_symmetry.jl")
+end
+
 @testset "Known lattices" begin
     include("some_known_lattices/rational.jl")
     include("some_known_lattices/sqrt2.jl")
