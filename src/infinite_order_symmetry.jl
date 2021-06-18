@@ -25,13 +25,30 @@ function inf_ord_sym2(vd,roots,das)
                 @assert is_integral(vd,s)
                 @assert preserve_the_form(vd,t)
                 
-                # Thanks Tommy Hofmann
-                L = splitting_field(minpoly(t))
-                tt = change_base_ring(L, t)
-                jnf_tt, change = jordan_normal_form(tt)
-                if !isdiagonal(jnf_tt)
-                    display(jnf_tt) # not diagonal => t is not diagonalizable => infinite order
+                rk_fixed_t,fixed_t = nullspace(t - identity_matrix(vd.field,vd.dim))
+
+                if rk_fixed_t ≠ 0
+
+                    gram_fixed_t = [c' * vd.gram_matrix.entries * d for c in eachcol(fixed_t.entries), d in eachcol(fixed_t.entries)]
+                    d,p = diagonalize_in_field(vd.field,gram_fixed_t)
+                    #display(d)
+                    if any(d[i,i]< 0 for i in 1:vd.dim)
+                        #println("has fixed point")
+                    else
+                        println("no fixed point in H")
+                    end
+
+                else
+                    # the rank of the fixed point set is null: no fixed point!
+                    println("no fixed point at all")
                 end
+                ## Thanks Tommy Hofmann
+                #L = splitting_field(minpoly(t))
+                #tt = change_base_ring(L, t)
+                #jnf_tt, change = jordan_normal_form(tt)
+                #if !isdiagonal(jnf_tt)
+                #    display(jnf_tt) # not diagonal => t is not diagonalizable => infinite order
+                #end
 
             else
             end

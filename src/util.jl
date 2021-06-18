@@ -93,6 +93,99 @@ function diagonalize(ring,A::Matrix,v₀=nothing)
 
 end
 
+function diagonalize_in_field(field,A::Matrix,v₀=nothing)
+    # returns T and D with D = T'GT
+    # algorithm copied from there https://math.stackexchange.com/questions/1388421/reference-for-linear-algebra-books-that-teach-reverse-hermite-method-for-symmetr
+    # plus a gcd step to reduce the growth of values
+    # plus the "Case 0" step to further reduce, but it's not enough
+    @assert LinearAlgebra.issymmetric(A) "A must be symmetric."
+
+
+
+    (n,m) = size(A)
+    @assert n == m
+
+    i0 = 1
+    I_ = field.(collect(LinearAlgebra.I(n)))
+    M = field.([A I_])
+
+    if v₀ ≠ nothing
+        @assert v₀' * A * v₀ ≠ 0
+        
+        # Do dumb stuff to get v₀ as first vector: this can probably be made cleaner
+        # We essentially just force v₀ as first vector
+        
+        k = [i for i in 1:n if v₀[i]≠0][1]::Int
+
+        M[k,:] = v₀[k].*M[k,:]
+        M[:,k] = v₀[k].*M[:,k]
+
+        for i in 1:n
+            if i ≠ k
+                M[k,:] = M[k,:] +  v₀[i] .* M[i,:]
+                M[:,k] = M[:,k] +  v₀[i] .* M[:,i]
+            end
+        end
+      
+        M[1,:], M[k,:] = M[k,:], M[1,:]
+        M[:,1], M[:,k] = M[:,k], M[:,1]
+        
+        @assert M[1,n+1:end] == v₀
+    end
+
+    D = M[1:n,1:n]
+    Q = M[1:n,n+1:2*n]
+    P = Q'
+
+
+    @assert P'*A*P == D 
+    
+    while i0 ≤ n
+       
+      
+        # look at non zero diagonal entries
+        non_zero_diag = [k for k in i0:n if M[k,k] ≠ 0]
+
+    
+        if length(non_zero_diag) == 0
+            non_zero_coordinates = [(i,j) for  i in i0:n, j in i0:n if M[i,j]≠0]
+            if isempty(non_zero_coordinates)
+                break
+            end
+            (i,j) = (sort(non_zero_coordinates, by=(x-> abs(M[x[1],x[2]]))))[1]
+            M[i,:] = M[i,:] + M[j,:]
+            M[:,i] = M[:,i] + M[:,j]
+        else
+            
+            k = non_zero_diag[1]
+            M[i0,:], M[k,:] = M[k,:], M[i0,:]
+            M[:,i0], M[:,k] = M[:,k], M[:,i0]
+
+            for i in i0+1:n
+                M[i,:] = (-M[i0,i] .* M[i0,:] + M[i0,i0] .* M[i,:])
+                M[:,i] = (-M[i0,i] .* M[:,i0] + M[i0,i0] .* M[:,i])
+            end
+            i0 = i0 + 1
+        end
+    end
+   
+
+    D = M[1:n,1:n]
+    Q = M[1:n,n+1:2*n]
+    P = Q'
+   
+
+    @assert LinearAlgebra.isdiag(D) "D is diagonal", D
+    @assert P'*A*P == D "We have a diagonalization (part 1)"
+    #@assert A == inv(P')*D*inv(P) "We have a diagonalization (part 2)"
+    
+    return (D,P)
+
+end
+
+
+
+
 function diagonalize_and_get_scaling(gram,ring,field,v₀=nothing)
 
     @assert LinearAlgebra.issymmetric(gram)
