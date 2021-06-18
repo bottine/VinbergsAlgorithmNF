@@ -1,15 +1,19 @@
 function inf_ord_sym2(vd,roots,das)
     
-    candidates = Combinatorics.powerset(roots,vd.dim,vd.dim) |> collect
-   
-    #display(candidates)
+    candidates = Combinatorics.powerset(collect(enumerate(roots)),vd.dim,vd.dim) |> collect
+  
+    println("Number of candidate diagrams: $(length(candidates))")
+    
+    display(candidates[1])
 
     # candidate sets of vectors basis R^{n+1}
     filter!(
-        x->isinvertible(matrix(vd.field,hcat(x...))),
+            x->isinvertible(matrix(vd.field,hcat([y[2] for y in x]...))),
         candidates
     )
 
+    println("After dropping non spanning : $(length(candidates))")
+    
     for pair in Combinatorics.powerset(candidates,1,2)
         
         c1 = pair[1]
@@ -18,7 +22,9 @@ function inf_ord_sym2(vd,roots,das)
         # check that c1 and c2 don't share all vectors?
 
         transfos = pairings(vd,c1,c2) 
-        for t in transfos
+        
+        println("Number of transfos : $(length(transfos))")
+        for (labels,t) in transfos
             
             if is_integral(vd,t) && t≠t^2 # t≠t^2 is a stupid shortcut to check that t is not the identity
                 s = inv(t)
@@ -36,31 +42,21 @@ function inf_ord_sym2(vd,roots,das)
                         #println("has fixed point")
                     else
                         println("no fixed point in H")
+                        display(labels)
                     end
 
                 else
                     # the rank of the fixed point set is null: no fixed point!
                     println("no fixed point at all")
+                    display(labels)
                 end
-                ## Thanks Tommy Hofmann
-                #L = splitting_field(minpoly(t))
-                #tt = change_base_ring(L, t)
-                #jnf_tt, change = jordan_normal_form(tt)
-                #if !isdiagonal(jnf_tt)
-                #    display(jnf_tt) # not diagonal => t is not diagonalizable => infinite order
-                #end
+
 
             else
             end
         end
     end
 
-end
-
-function fixed_points_intersection(vd,tt)
-    I_ = matrix(vd.field,LinearAlgebra.I(vd.dim))
-    n,N = nullspace(vcat([t-I_ for t in tt]))
-    return n,N
 end
 
 function infinite_order_symmetry(vd,roots,das)
@@ -73,11 +69,6 @@ function infinite_order_symmetry(vd,roots,das)
     [pairings(vd,vr1,vr2) |> display for vr2 in vertices_roots]
 end
 
-function vertex_diagram_intersection(vd,roots)
-    Hecke._inter([vd.gram*r for r in roots]) 
-end
-
-
 function pairings(vd,vr1,vr2)
     
     function to_SimpleGraph_plus_colors(vertex_roots)
@@ -89,12 +80,12 @@ function pairings(vd,vr1,vr2)
         edges_color = Dict()
         vertices_color = Dict()
         for i in 1:d
-            push!(vertices_color,i=>norm_squared(vd,vertex_roots[i]))
+            push!(vertices_color,i=>norm_squared(vd,vertex_roots[i][2]))
             for j in i+1:d
                 LightGraphs.add_edge!(g,i,j)
                 # it seems LightGraphs's algorithm wants both direction for each edge…
-                push!(edges_color,e(i,j)=>Gram_coeff(vd,vertex_roots[i],vertex_roots[j]))
-                push!(edges_color,e(j,i)=>Gram_coeff(vd,vertex_roots[i],vertex_roots[j]))
+                push!(edges_color,e(i,j)=>Gram_coeff(vd,vertex_roots[i][2],vertex_roots[j][2]))
+                push!(edges_color,e(j,i)=>Gram_coeff(vd,vertex_roots[i][2],vertex_roots[j][2]))
             end
         end
         return g, edges_color,vertices_color 
@@ -108,17 +99,18 @@ function pairings(vd,vr1,vr2)
 
     pairings =  LightGraphs.Experimental.all_isomorph(g1,g2, LightGraphs.Experimental.VF2(),edge_relation=ec_rel,vertex_relation=vc_rel)
     
-    matrices = [pairing_to_matrix(vd,vr1,vr2,p) for p in pairings]
-    
-    return matrices
+    return [(pairing_to_labels(vd,vr1,vr2,p),pairing_to_matrix(vd,vr1,vr2,p)) for p in pairings]
 
 end
 
+function pairing_to_labels(vd,vr1,vr2,pairing)
+    return [(vr1[p][1],vr2[q][1]) for (p,q) in pairing]  
+end
 
 function pairing_to_matrix(vd,vr1,vr2,pairing)
 
-    m1 = matrix(vd.field,hcat(vr1[[p[1] for p in pairing]]...))
-    m2 = matrix(vd.field,hcat(vr2[[p[2] for p in pairing]]...))
+    m1 = matrix(vd.field,hcat([x[2] for x in vr1[[p[1] for p in pairing]]]...))
+    m2 = matrix(vd.field,hcat([x[2] for x in vr2[[p[2] for p in pairing]]]...))
 
     return m1 * inv(m2)
 
