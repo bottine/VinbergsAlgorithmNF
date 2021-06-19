@@ -30,7 +30,7 @@
 end
 
 
-@testset "Infinite order symmetries for simple diagonal forms over ℚ(√2)" begin
+@testset "Infinite order symmetries for forms over ℚ(√2)" begin
     K,a = Hecke.quadratic_field(2)
 
 
@@ -38,10 +38,10 @@ end
     cases = [
         (
             [
-                2 0 0 -1;
-                0 2 -1 -1;
-                0 -1 2 a-1;
-                -1 -1 a-1 2
+                 2  0  0  -1;
+                 0  2 -1  -1;
+                 0 -1  2   a-1;
+                -1 -1  a-1 2
             ],
             false
         ),

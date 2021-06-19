@@ -1,16 +1,67 @@
+# TODO
+#
+#=
+# 
+# candidate is a tuple (indices,gram_matrix,lightgraph,vector_matrix,inverse_of_vector_matrix)
+#
+#
+#
+# =#
+
+
+function is_infinite_order_isometry(
+    vd,
+    t,
+    check_invertible=false,
+    check_integral=false,
+    check_integrally_invertible=false,
+    check_preserves_form=false,
+)
+
+    # Normally: if it preserve the form and is invertible and integral, the inverse also preserves the form
+    # Also, having unit determinant is enough to have an integral inverse
+    # But we check too much: better safe than sorry
+
+    check_invertible && @assert isinvertible(t)
+    check_integral && @assert is_integral(vd,t)
+    check_integrally_invertible && @assert isunit(vd.ring(det(t)))
+    check_integrally_invertible && @assert is_integrally_invertible(vd,t)
+    check_preserves_form && @assert preserves_the_form(vd,t) 
+
+   rk_fixed_t,fixed_t = nullspace(t - identity_matrix(vd.field,vd.dim))
+
+    if rk_fixed_t ≠ 0
+
+        gram_fixed_t = [c' * vd.gram_matrix.entries * d for c in eachcol(fixed_t.entries), d in eachcol(fixed_t.entries)]
+        
+        d,p = diagonalize_in_field(vd.field,gram_fixed_t)
+        
+        if any(v < 0 for v in LinearAlgebra.diag(d))
+            return false 
+        else
+            return true
+        end
+
+    else
+        return true
+    end
+
+
+end
+
 function inf_ord_sym2(vd,roots,das)
     
     candidates = Combinatorics.powerset(collect(enumerate(roots)),vd.dim,vd.dim) |> collect
   
     println("Number of candidate diagrams: $(length(candidates))")
     
-    display(candidates[1])
-
     # candidate sets of vectors basis R^{n+1}
     filter!(
         x->isinvertible(matrix(vd.field,hcat([y[2] for y in x]...))),
         candidates
     )
+
+    id = identity_matrix(vd.field,vd.dim)
 
     println("After dropping non spanning : $(length(candidates))")
     
@@ -24,37 +75,13 @@ function inf_ord_sym2(vd,roots,das)
         transfos = pairings(vd,c1,c2) 
         
         for (labels,t) in transfos
-            
-            if is_integral(vd,t) && t≠t^2 # t≠t^2 is a stupid shortcut to check that t is not the identity
-                s = inv(t)
-                @assert is_integral(vd,s)
-                @assert preserve_the_form(vd,t)
-                
-                rk_fixed_t,fixed_t = nullspace(t - identity_matrix(vd.field,vd.dim))
-
-                if rk_fixed_t ≠ 0
-
-                    gram_fixed_t = [c' * vd.gram_matrix.entries * d for c in eachcol(fixed_t.entries), d in eachcol(fixed_t.entries)]
-                    d,p = diagonalize_in_field(vd.field,gram_fixed_t)
-                    #display(d)
-                    if any(d[i,i]< 0 for i in 1:size(d)[1])
-                        #println("has fixed point")
-                    else
-                        println("no fixed point in H")
-                        display(labels)
-                        return true
-                    end
-
-                else
-                    # the rank of the fixed point set is null: no fixed point!
-                    println("no fixed point at all")
-                    display(labels)
-                    return true
-                end
-
-
-            else
+           
+            if t≠id && is_integral(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true)
+                display(labels)
+                return true
             end
+
+
         end
     end
 
@@ -122,11 +149,15 @@ function is_integral(vd,mat)
     all(coeff ∈ vd.ring for coeff in mat)
 end
 
-function preserve_the_form(vd,mat)
+function preserves_the_form(vd,mat)
     mat' * vd.gram_matrix * mat == vd.gram_matrix
 end
 
-function is_integrally_inversible(vd,mat)
-    inv_mat = inv(mat)
-    return is_integral(inv_mat)
+function is_integrally_invertible(vd,mat)
+    
+    if !isinvertible(mat)
+        return false
+    end
+
+    return is_integral(vd,inv(mat))
 end
