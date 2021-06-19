@@ -94,18 +94,76 @@ function inf_ord_sym2(vd,roots,das)
     return false
 end
 
+
+function inf_ord_sym3(vd,roots,das)
+   
+    Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
+
+    candidates = [
+                  (labels,
+                   normalize(vd,intersection_vector(vd,roots[labels])),
+                   Gram[labels,labels],
+                   to_SimpleGraph_plus_colors(Gram,labels),
+                  ) for labels in collect.(CoxeterDiagrams.all_spherical_of_rank(das,vd.dim-1))
+                    if rank(matrix(vd.field,hcat(roots[labels]...))) == vd.dim-1
+                 ]
+   
+    println("Number of candidate diagrams: $(length(candidates))")
+    
+    id = identity_matrix(vd.field,vd.dim)
+    
+    for pair in Combinatorics.powerset(candidates,1,2)
+        
+        c1 = pair[1]
+        c2 = length(pair) == 2 ? pair[2] : pair[1]
+
+
+        if norm_squared(vd,c1[2]) ≠ norm_squared(vd,c2[2])
+            continue
+        end
+
+        pairings = graph_pairings(vd,c1[4],c2[4])
+        
+        for p in pairings
+            
+            labels_pairs = [(c1[1][p],c2[1][q]) for (p,q) in p]
+                
+            m1 = matrix(vd.field,hcat(c1[2],roots[[p[1] for p in labels_pairs]]...))
+            m2 = matrix(vd.field,hcat(c2[2],roots[[p[2] for p in labels_pairs]]...))
+
+            t = m1 * inv(m2)
+
+            if t≠id && is_integral(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true)
+                display(labels_pairs)
+                return true
+            end
+
+
+        end
+    end
+
+    return false
+end
+
 function intersection_vector(vd,roots)
     
     rk,mat = nullspace(vcat([matrix(vd.field,r' * vd.gram_matrix.entries) for r in roots]...))
     @assert rk == 1
     v = reshape(mat.entries,vd.dim)
-    display(v)
     @assert all(times(vd,v,r) == 0 for r in roots)
     if times(vd,v,basepoint(vd)) > 0
         v = -v
     end
-    display(v)
-    #[nullspace(matrix(vd.field,r' * vd.gram_matrix.entries))[2] for r in roots] |> display
+    @assert norm_squared(vd,v) < 0
+    return normalize(vd,v) 
+end
+
+function normalize(vd,vec)
+    vec2 =  lcm_denominators(vd.ring,vec) .* vec
+    vec2 .//= vd.field(elem_gcd(vd.ring,vec2))
+    @assert all(v in vd.ring for v in vec2)
+    @assert isunit(vd.ring(elem_gcd(vd.ring,vec2)))
+    return vec2
 end
 
 function infinite_order_symmetry(vd,roots,das)
