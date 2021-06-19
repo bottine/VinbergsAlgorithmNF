@@ -50,34 +50,40 @@ function is_infinite_order_isometry(
 end
 
 function inf_ord_sym2(vd,roots,das)
+   
+    Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
+
+    candidates = [
+                  (labels,
+                   Gram[labels,labels],
+                   to_SimpleGraph_plus_colors(Gram,labels),
+                  ) for labels in Combinatorics.powerset(collect(1:length(roots)),vd.dim,vd.dim)
+                    if isinvertible(matrix(vd.field,hcat(roots[labels]...)))
+                 ]
     
-    candidates = Combinatorics.powerset(collect(enumerate(roots)),vd.dim,vd.dim) |> collect
-  
     println("Number of candidate diagrams: $(length(candidates))")
     
-    # candidate sets of vectors basis R^{n+1}
-    filter!(
-        x->isinvertible(matrix(vd.field,hcat([y[2] for y in x]...))),
-        candidates
-    )
-
     id = identity_matrix(vd.field,vd.dim)
-
-    println("After dropping non spanning : $(length(candidates))")
     
     for pair in Combinatorics.powerset(candidates,1,2)
         
         c1 = pair[1]
         c2 = length(pair) == 2 ? pair[2] : pair[1]
 
-        # check that c1 and c2 don't share all vectors?
 
-        transfos = pairings(vd,c1,c2) 
+        pairings = graph_pairings(vd,c1[3],c2[3])
         
-        for (labels,t) in transfos
-           
+        for p in pairings
+            
+            labels_pairs = [(c1[1][p],c2[1][q]) for (p,q) in p]
+                
+            m1 = matrix(vd.field,hcat(roots[[p[1] for p in labels_pairs]]...))
+            m2 = matrix(vd.field,hcat(roots[[p[2] for p in labels_pairs]]...))
+
+            t = m1 * inv(m2)
+
             if t≠id && is_integral(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true)
-                display(labels)
+                display(labels_pairs)
                 return true
             end
 
@@ -86,6 +92,20 @@ function inf_ord_sym2(vd,roots,das)
     end
 
     return false
+end
+
+function intersection_vector(vd,roots)
+    
+    rk,mat = nullspace(vcat([matrix(vd.field,r' * vd.gram_matrix.entries) for r in roots]...))
+    @assert rk == 1
+    v = reshape(mat.entries,vd.dim)
+    display(v)
+    @assert all(times(vd,v,r) == 0 for r in roots)
+    if times(vd,v,basepoint(vd)) > 0
+        v = -v
+    end
+    display(v)
+    #[nullspace(matrix(vd.field,r' * vd.gram_matrix.entries))[2] for r in roots] |> display
 end
 
 function infinite_order_symmetry(vd,roots,das)
@@ -98,38 +118,36 @@ function infinite_order_symmetry(vd,roots,das)
     [pairings(vd,vr1,vr2) |> display for vr2 in vertices_roots]
 end
 
-function pairings(vd,vr1,vr2)
-    
-    function to_SimpleGraph_plus_colors(vertex_roots)
+function to_SimpleGraph_plus_colors(Gram,labels)
 
-        d = length(vertex_roots)
+    d = length(labels)
 
-        g = LightGraphs.SimpleGraph(d)
-        e = LightGraphs.edgetype(g)
-        edges_color = Dict()
-        vertices_color = Dict()
-        for i in 1:d
-            push!(vertices_color,i=>norm_squared(vd,vertex_roots[i][2]))
-            for j in i+1:d
-                LightGraphs.add_edge!(g,i,j)
-                # it seems LightGraphs's algorithm wants both direction for each edge…
-                push!(edges_color,e(i,j)=>Gram_coeff(vd,vertex_roots[i][2],vertex_roots[j][2]))
-                push!(edges_color,e(j,i)=>Gram_coeff(vd,vertex_roots[i][2],vertex_roots[j][2]))
-            end
+    g = LightGraphs.SimpleGraph(d)
+    e = LightGraphs.edgetype(g)
+    edges_color = Dict()
+    vertices_color = Dict()
+    for i in 1:d
+        push!(vertices_color,i=>Gram[labels[i],labels[i]])
+        for j in i+1:d
+            LightGraphs.add_edge!(g,i,j)
+            # it seems LightGraphs's algorithm wants both direction for each edge…
+            push!(edges_color,e(i,j)=>Gram[labels[i],labels[j]])
+            push!(edges_color,e(j,i)=>Gram[labels[j],labels[i]])
         end
-        return g, edges_color,vertices_color 
     end
+    return g, edges_color,vertices_color 
+end
 
-    g1,ce1,cv1 = to_SimpleGraph_plus_colors(vr1)
-    g2,ce2,cv2 = to_SimpleGraph_plus_colors(vr2)
+function graph_pairings(vd,graph1,graph2)
+
+    g1,ce1,cv1 = graph1 
+    g2,ce2,cv2 = graph2 
 
     ec_rel(e1,e2) = ce1[e1] == ce2[e2]
     vc_rel(v1,v2) = cv1[v1] == cv2[v2]
 
-    pairings =  LightGraphs.Experimental.all_isomorph(g1,g2, LightGraphs.Experimental.VF2(),edge_relation=ec_rel,vertex_relation=vc_rel)
+    return LightGraphs.Experimental.all_isomorph(g1,g2, LightGraphs.Experimental.VF2(),edge_relation=ec_rel,vertex_relation=vc_rel)
     
-    return [(pairing_to_labels(vd,vr1,vr2,p),pairing_to_matrix(vd,vr1,vr2,p)) for p in pairings]
-
 end
 
 function pairing_to_labels(vd,vr1,vr2,pairing)
