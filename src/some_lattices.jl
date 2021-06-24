@@ -3,46 +3,43 @@ module Lat
     
     using LinearAlgebra
 
+
+
     """
         ⊕(M₁,M₂)
-    Compute the "block diagonal" matrix with blocks ``M₁`` and ``M₂``, assuming both are square symetric.
+    Compute the "block diagonal" matrix with blocks ``M₁`` and ``M₂``, assuming both are square symmetric.
     """
     function ⊕(M₁,M₂)
 
-        if typeof(M₁) <: Vector
-            @assert length(M₁) == 1
-            M₁ = Matrix(reshape(M₁,1,1))
-        end
-        if !(typeof(M₁) <: Matrix)
-            M₁ = Matrix(reshape([M₁],1,1))
-        end
-        if typeof(M₂) <: Vector
-            @assert length(M₂) == 1
-            M₂ = Matrix(reshape(M₂,1,1))
-        end
-        if !(typeof(M₂) <: Matrix)
-            M₂ = Matrix(reshape([M₂],1,1))
+        function good_form(M::Matrix)
+            @assert permutedims(M) == M "Only accept symmetric matrices"
+            return M
         end
 
+        function good_form(D::Vector)
+            M = zeros(Int,length(D),length(D))
+            for (i,d) in enumerate(D)
+                M[i,i] = d
+            end
+            return M
+        end
+
+        function good_form(c)
+            return Matrix(reshape([c],1,1))
+        end
+
+        M₁ = good_form(M₁)
+        M₂ = good_form(M₂)
+        
         n₁ = size(M₁)[1]
         n₂ = size(M₂)[1]
-        @assert size(M₁) == (n₁,n₁)
-        @assert size(M₂) == (n₂,n₂)
-        @assert M₁' == M₁
-        @assert M₂' == M₂
 
-        if  n₂ == 0
-            return M₁
-        elseif n₁ == 0
-            return M₂
-        else
-            P = Array{Any, 2}(undef, n₁+n₂, n₁+n₂)
-            P[:,:] = fill(0,n₁+n₂,n₁+n₂)
-            P[1:n₁,1:n₁] = M₁
-            P[n₁+1:end,n₁+1:end] = M₂
+        P = Array{Any, 2}(undef, n₁+n₂, n₁+n₂)
+        P[:,:] = fill(0,n₁+n₂,n₁+n₂)
+        P[1:n₁,1:n₁] = M₁
+        P[n₁+1:end,n₁+1:end] = M₂
 
-            return P
-        end
+        return P
     end
 
     block_diag(M...) = reduce(⊕,M)  

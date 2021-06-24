@@ -24,6 +24,7 @@
         vd = VinbergData(K,mat)
         (st,(root,dict,das)) = VA.next_n_roots!(vd,n=10)
         @test st == reflective
+        @test VA.inf_ord_sym2(vd,root,das) != reflective
         @test VA.inf_ord_sym3(vd,root,das) != reflective
     end
 

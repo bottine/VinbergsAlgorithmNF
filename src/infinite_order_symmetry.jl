@@ -60,12 +60,23 @@ function inf_ord_sym2(vd,roots,das)
                   ) for labels in Combinatorics.powerset(collect(1:length(roots)),vd.dim,vd.dim)
                     if isinvertible(matrix(vd.field,hcat(roots[labels]...)))
                  ]
-    
-    println("Number of candidate diagrams: $(length(candidates))")
+
+    grouped_candidates = Dict()
+    for c in candidates
+        ds = sort([collect(sort(g)) for g in eachcol(c[2])]) |> collect
+        if ds in keys(grouped_candidates)
+            push!(grouped_candidates[ds],c)
+        else
+            push!(grouped_candidates,ds=>[c])
+        end
+    end   
+
+
+    println("Number of candidate diagrams: $(sum(length.(values(grouped_candidates))))")
     
     id = identity_matrix(vd.field,vd.dim)
     
-    for pair in Combinatorics.powerset(candidates,1,2)
+    for candidates in values(grouped_candidates), pair in Combinatorics.powerset(candidates,1,2)
         
         c1 = pair[1]
         c2 = length(pair) == 2 ? pair[2] : pair[1]
@@ -107,17 +118,30 @@ function inf_ord_sym3(vd,roots,das)
                   ) for labels in collect.(CoxeterDiagrams.all_spherical_of_rank(das,vd.dim-1))
                     if rank(matrix(vd.field,hcat(roots[labels]...))) == vd.dim-1
                  ]
-   
-    println("Number of candidate diagrams: $(length(candidates))")
+  
+
+    grouped_candidates = Dict()
+    for c in candidates
+        ds = sort([collect(sort(g)) for g in eachcol(c[3])]) |> collect
+        if ds in keys(grouped_candidates)
+            push!(grouped_candidates[ds],c)
+        else
+            push!(grouped_candidates,ds=>[c])
+        end
+    end
+
+
+    println("Number of candidate diagrams: $(sum(length.(values(grouped_candidates))))")
     
     id = identity_matrix(vd.field,vd.dim)
     
-    for pair in Combinatorics.powerset(candidates,1,2)
+    for candidates in values(grouped_candidates), pair in Combinatorics.powerset(candidates,1,2)
         
         c1 = pair[1]
         c2 = length(pair) == 2 ? pair[2] : pair[1]
 
-
+        # what if the norms differ by the square of a unit? TODO
+        # In this case I think we should multiply c1[2] or c2[2] by the unit in question.
         if norm_squared(vd,c1[2]) ≠ norm_squared(vd,c2[2])
             continue
         end
@@ -145,6 +169,67 @@ function inf_ord_sym3(vd,roots,das)
     return false
 end
 
+#=
+function inf_ord_sym4(vd,roots,das)
+   
+    Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
+
+    candidates = [
+                  (labels,
+                   normalize(vd,intersection_vector(vd,roots[labels])),
+                   Gram[labels,labels],
+                   to_SimpleGraph_plus_colors(Gram,labels),
+                  ) for labels in Combinatorics.powerset(collect(1:length(roots)),vd.dim-1,vd.dim-1)
+                    if rank(matrix(vd.field,hcat(roots[labels]...))) == vd.dim-1
+                 ]
+   
+    println("Number of candidate diagrams: $(length(candidates))")
+    
+    id = identity_matrix(vd.field,vd.dim)
+    
+    for pair in Combinatorics.powerset(candidates,1,2)
+        
+        c1 = pair[1]
+        c2 = length(pair) == 2 ? pair[2] : pair[1]
+        
+        n1 = norm_squared(vd,c1[2])
+        n2 = norm_squared(vd,c2[2])
+        if  (n1 == 0 && n2 != 0)
+        ||  (n1 != 0 && n2 == 0)
+        ||  (n1//n2) ∉ vd.units_squared
+            continue
+        end
+
+        pairings = graph_pairings(vd,c1[4],c2[4])
+        
+        for p in pairings
+            
+            labels_pairs = [(c1[1][p],c2[1][q]) for (p,q) in p]
+                
+            m1 = matrix(vd.field,hcat(c1[2],roots[[p[1] for p in labels_pairs]]...))
+            m2 = matrix(vd.field,hcat(c2[2],roots[[p[2] for p in labels_pairs]]...))
+           
+            display(m2)
+
+            @assert rank(m2[2:end,:]) == vd.dim-1 "$(m2[2:end,:])"
+            @assert rank(m2[:,2:end]) == vd.dim-1
+            @assert rank(m2) == vd.dim
+
+            t = m1 * inv(m2)
+
+            if t≠id && is_integral(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true)
+                display(labels_pairs)
+                return true
+            end
+
+
+        end
+    end
+
+    return false
+end
+=#
+
 function intersection_vector(vd,roots)
     
     rk,mat = nullspace(vcat([matrix(vd.field,r' * vd.gram_matrix.entries) for r in roots]...))
@@ -154,7 +239,7 @@ function intersection_vector(vd,roots)
     if times(vd,v,basepoint(vd)) > 0
         v = -v
     end
-    @assert norm_squared(vd,v) < 0
+    #@assert norm_squared(vd,v) ≤ 0
     return normalize(vd,v) 
 end
 
