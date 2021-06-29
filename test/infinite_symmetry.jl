@@ -1,4 +1,6 @@
 
+
+
 @testset "Infinite order symmetries for simple diagonal forms over ℚ" begin
     K,a = Hecke.rationals_as_number_field()
 
@@ -16,7 +18,7 @@
         ([-14,1,1],true),
         ([-14,1,1,1],false),
         ([-17,1,1,1],true),
-        ([-17,1,1,1,1],false),
+        ([-17,1,1,1,1],false), #= =#
     ]
 
     for (diag,reflective) in cases
@@ -24,7 +26,9 @@
         vd = VinbergData(K,mat)
         (st,(root,dict,das)) = VA.next_n_roots!(vd,n=10)
         @test st == reflective
-        @test VA.inf_ord_sym2(vd,root,das) != reflective
+        #@test !reflective ? !VA.inf_ord_sym(vd,root,das) || VA.inf_ord_sym2(vd,root,das) : true
+        #@test VA.inf_ord_sym(vd,root,das) != reflective
+        #@test VA.inf_ord_sym2(vd,root,das) != reflective
         @test VA.inf_ord_sym3(vd,root,das) != reflective
     end
 

@@ -16,6 +16,7 @@ function is_infinite_order_isometry(
     check_integral=false,
     check_integrally_invertible=false,
     check_preserves_form=false,
+    check_preserves_upper_sheet=false,
 )
 
     # Normally: if it preserve the form and is invertible and integral, the inverse also preserves the form
@@ -27,6 +28,7 @@ function is_infinite_order_isometry(
     check_integrally_invertible && @assert isunit(vd.ring(det(t)))
     check_integrally_invertible && @assert is_integrally_invertible(vd,t)
     check_preserves_form && @assert preserves_the_form(vd,t) 
+    check_preserves_upper_sheet && @assert preserves_upper_sheet(vd,t) 
 
    rk_fixed_t,fixed_t = nullspace(t - identity_matrix(vd.field,vd.dim))
 
@@ -106,7 +108,7 @@ function inf_ord_sym2(vd,roots,das)
 end
 
 
-function inf_ord_sym3(vd,roots,das)
+function inf_ord_sym4(vd,roots,das)
    
     Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
 
@@ -168,6 +170,195 @@ function inf_ord_sym3(vd,roots,das)
 
     return false
 end
+
+function inf_ord_sym3(vd,roots,das)
+   
+    Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
+    Gram_hash = hash.(Gram) 
+
+    grouped_candidates = Dict{
+                              Vector{Vector{UInt64}},
+                              Vector{Tuple{Vector{Int64}, Vector{nf_elem}, Matrix{nf_elem}, Tuple{LightGraphs.SimpleGraphs.SimpleGraph{Int64}, Dict{Any, Any}, Dict{Any, Any}}}}
+                             }()
+    for labels in collect.(CoxeterDiagrams.all_spherical_of_rank(das,vd.dim-1))
+        
+        vectors = roots[labels]
+        if rank(matrix(vd.field,hcat(vectors...))) == vd.dim-1
+            
+            gram = Gram[labels,labels]
+            gram_hash = Gram_hash[labels,labels]
+            last_vector = intersection_vector(vd,vectors)
+            @assert norm_squared(vd,last_vector) < 0
+
+            simple_graph_plus_colors = to_SimpleGraph_plus_colors(Gram,labels)
+               
+            group = sort([collect(sort(g)) for g in eachcol(gram_hash)]) |> collect
+            if group in keys(grouped_candidates)
+                push!(grouped_candidates[group],(labels,last_vector,gram,simple_graph_plus_colors))
+            else
+                push!(
+                    grouped_candidates,
+                    group => [(labels,last_vector,gram,simple_graph_plus_colors)]
+                )
+            end
+        end
+
+
+    end
+
+    println("Number of candidate diagrams: $(sum(length.(values(grouped_candidates))))")
+    
+    id = identity_matrix(vd.field,vd.dim)
+    
+    for candidates in values(grouped_candidates), pair in Combinatorics.powerset(candidates,1,2)
+        
+        c1 = pair[1]
+        c2 = length(pair) == 2 ? pair[2] : pair[1]
+
+        (labels1,last_vec1,gram1,graph1) = c1
+        (labels2,last_vec2,gram2,graph2) = c2
+        
+        
+        issq,sqrt = issquare(norm_squared(vd,last_vec1)//norm_squared(vd,last_vec2))
+        if !issq || sqrt ∉ vd.ring
+            continue
+        end
+        last_vec2 .*= sqrt
+        
+
+        if norm_squared(vd,last_vec1) ≠ norm_squared(vd,last_vec2)
+            continue
+        end
+
+        pairings = graph_pairings(vd,graph1,graph2)
+        
+        for p in pairings, sg in [+1,-1]
+            
+            labels_pairs = [(labels1[p],labels2[q]) for (p,q) in p]
+                
+            m1 = matrix(vd.field,hcat(last_vec1,roots[[p[1] for p in labels_pairs]]...))
+            m2 = matrix(vd.field,hcat(sg*last_vec2,roots[[p[2] for p in labels_pairs]]...))
+
+            @assert norm_squared(vd,sg*last_vec2) <  0
+            @assert all(times(vd,sg*last_vec2, r) == 0 for r in roots[[p[2] for p in labels_pairs]])
+
+
+            t = m1 * inv(m2)
+            #=
+            display(m1)
+            display(m2)
+
+            for i in 1:vd.dim-1
+                display(roots[p[i][1]])
+                display(roots[p[i][2]])
+                @assert Matrix(t) * roots[p[i][1]] == roots[p[i][2]] 
+            end
+            =#
+            
+
+            if t≠id && is_integral(vd,t) && preserves_upper_sheet(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true,true)
+                display(labels_pairs)
+                println("from")
+                display(roots[[p[1] for p in labels_pairs]])
+                println(last_vec1)
+                println("to")
+                display(roots[[p[2] for p in labels_pairs]])
+                println(sg*last_vec2)
+                println("transfo:")
+                display(m1)
+                display(m2)
+                display(t)
+                return true
+            end
+
+
+        end
+    end
+
+    return false
+end
+
+function inf_ord_sym(vd,roots,das)
+   
+    Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
+    Gram_hash = hash.(Gram) 
+
+    grouped_candidates = Dict{
+                              Vector{Vector{UInt64}},
+                              Vector{Tuple{Vector{Int64}, Vector{nf_elem}, Matrix{nf_elem}, Tuple{LightGraphs.SimpleGraphs.SimpleGraph{Int64}, Dict{Any, Any}, Dict{Any, Any}}}}
+                             }()
+    for labels in Combinatorics.powerset(collect(1:length(roots)),vd.dim-1,vd.dim-1)
+        
+        vectors = roots[labels]
+        if rank(matrix(vd.field,hcat(vectors...))) == vd.dim-1
+            
+            gram = Gram[labels,labels]
+            gram_hash = Gram_hash[labels,labels]
+            last_vector = intersection_vector(vd,vectors)
+            if times(vd,last_vector,last_vector) ≠ 0
+                simple_graph_plus_colors = to_SimpleGraph_plus_colors(Gram,labels)
+                   
+                group = sort([collect(sort(g)) for g in eachcol(gram_hash)]) |> collect
+                if group in keys(grouped_candidates)
+                    push!(grouped_candidates[group],(labels,last_vector,gram,simple_graph_plus_colors))
+                else
+                    push!(
+                        grouped_candidates,
+                        group => [(labels,last_vector,gram,simple_graph_plus_colors)]
+                    )
+                end
+            end
+        end
+
+
+    end
+
+    println("Number of candidate diagrams: $(sum(length.(values(grouped_candidates))))")
+    
+    id = identity_matrix(vd.field,vd.dim)
+    
+    for candidates in values(grouped_candidates), pair in Combinatorics.powerset(candidates,1,2)
+        
+        c1 = pair[1]
+        c2 = length(pair) == 2 ? pair[2] : pair[1]
+
+        (labels1,last_vec1,gram1,graph1) = c1
+        (labels2,last_vec2,gram2,graph2) = c2
+
+        # what if the norms differ by the square of a unit? TODO
+        # In this case I think we should multiply c1[2] or c2[2] by the unit in question.
+        issq,sqrt = issquare(norm_squared(vd,last_vec1)//norm_squared(vd,last_vec2))
+        if !issq
+            continue
+        end
+
+        pairings = graph_pairings(vd,graph1,graph2)
+        
+        for p in pairings
+            
+            labels_pairs = [(labels1[p],labels2[q]) for (p,q) in p]
+                
+            m1 = matrix(vd.field,hcat(last_vec1,roots[[p[1] for p in labels_pairs]]...))
+            m2 = matrix(vd.field,hcat(sqrt.*last_vec2,roots[[p[2] for p in labels_pairs]]...))
+
+            @assert times(vd,last_vec2,last_vec2) ≠ 0
+            @assert all(times(vd,last_vec2, r) == 0 for r in roots[[p[2] for p in labels_pairs]])
+
+
+            t = m1 * inv(m2)
+
+            if t≠id && is_integral(vd,t) && preserves_upper_sheet(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true,true)
+                display(labels_pairs)
+                return true
+            end
+
+
+        end
+    end
+
+    return false
+end
+
 
 #=
 function inf_ord_sym4(vd,roots,das)
@@ -240,7 +431,7 @@ function intersection_vector(vd,roots)
         v = -v
     end
     #@assert norm_squared(vd,v) ≤ 0
-    return normalize(vd,v) 
+    return v 
 end
 
 function normalize(vd,vec)
@@ -321,4 +512,8 @@ function is_integrally_invertible(vd,mat)
     end
 
     return is_integral(vd,inv(mat))
+end
+
+function preserves_upper_sheet(vd,mat)
+    to_diag_rep(vd,mat.entries * basepoint(vd))[1] > 0
 end
