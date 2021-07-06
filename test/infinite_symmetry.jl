@@ -30,6 +30,7 @@
         #@test VA.inf_ord_sym(vd,root,das) != reflective
         #@test VA.inf_ord_sym2(vd,root,das) != reflective
         @test VA.inf_ord_sym3(vd,root,das) != reflective
+        @test VA.inf_ord_sym(vd,root,das) != reflective
     end
 
 end

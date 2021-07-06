@@ -6,6 +6,7 @@ function Base.:>(x::nf_elem,y::nf_elem,p::InfPlc)
     x == y && return false
     return ispositive(x-y,p)
 end
+
 function Base.:≥(x::nf_elem,y::nf_elem,p::InfPlc)
     @assert parent(x) == parent(y) && istotally_real(parent(x)) "Need totally real common parent field"
     
