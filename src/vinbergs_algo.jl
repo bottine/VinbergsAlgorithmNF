@@ -778,32 +778,32 @@ function roots_at_distance_zero(vd::VinbergData)
 end
 
 
-function cone_roots2(vd, roots_at_distance_zero)
+function cone_roots2(vd, roots_at_distance_zero=roots_at_distance_zero(vd))
     
 
-    basepoint = vcat(0,ones(vd.dim))
-    
-    remaining_roots = filter(x-> times(vd,basepoint,x) ≤ 0, roots_at_distance_zero)
-    cone_roots = []
+    roots = filter(r->r[findlast(≠(0),r)] < 0,roots_at_distance_zero)
 
+    function my_order(r) 
+        i = findlast(≠(0),r)
+        d_i = vd.diagonal_values[i]
+        r_i = r[i]
 
-    fake_dist(x,r) = (times(vd,x,r)^2)//(norm_squared(vd,x)*norm_squared(vd,r)) 
+        return (i,r_i^2//norm_squared(vd,r))
 
-    for dim in 1:vd.dim
-       
-        sort!(remaining_roots,by=x->fake_dist(basepoint,x))
-            
-        i=1
-        while i ≤ length(remaining_roots)
-            r = remaining_roots[i]
-                     
-        end
-
-        
-
-
-        basepoint[1+dim] = 0
     end
+
+    sort!(roots,by=my_order)
+    #display(roots)
+    cone_roots = Vector{Vector{nf_elem}}()
+
+    for r in roots
+        if all(times(vd,cr,r)≤0 for cr in cone_roots)
+            push!(cone_roots,r)
+        end
+    end
+    
+    display(cone_roots)
+    return cone_roots
 
 end
 
@@ -977,7 +977,7 @@ function next_n_roots!(
     vd::VinbergData;
     n=10,
 )
-    roots = cone_roots(vd)
+    roots = cone_roots2(vd)
 
     return next_n_roots!(vd,roots;n=n,t2_cache=nothing)
 end
