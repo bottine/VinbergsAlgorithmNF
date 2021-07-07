@@ -777,6 +777,36 @@ function roots_at_distance_zero(vd::VinbergData)
     return vcat([extend_root_stem(vd,zero_stem,l,no_constraints(),t2_cache) for l in vd.possible_root_norms_squared_up_to_squared_units]...)
 end
 
+
+function cone_roots2(vd, roots_at_distance_zero)
+    
+
+    basepoint = vcat(0,ones(vd.dim))
+    
+    remaining_roots = filter(x-> times(vd,basepoint,x) ≤ 0, roots_at_distance_zero)
+    cone_roots = []
+
+
+    fake_dist(x,r) = (times(vd,x,r)^2)//(norm_squared(vd,x)*norm_squared(vd,r)) 
+
+    for dim in 1:vd.dim
+       
+        sort!(remaining_roots,by=x->fake_dist(basepoint,x))
+            
+        i=1
+        while i ≤ length(remaining_roots)
+            r = remaining_roots[i]
+                     
+        end
+
+        
+
+
+        basepoint[1+dim] = 0
+    end
+
+end
+
 function cone_roots(vd,roots_at_distance_zero)
 
     @warn "Cone roots computation are approximative ⇒ double check the results by hand."
@@ -793,6 +823,9 @@ function cone_roots(vd,roots_at_distance_zero)
     sort!(integer_roots)
     roots_at_distance_zero = vcat(integer_roots,non_integer_roots)
     @assert len == length(roots_at_distance_zero) "did we drop a root while reorgarizing them?"
+    
+    # Those are the roots containing a specific point of the sphere 
+    filter!(r->r[findfirst(≠(0),r)] < 0,roots_at_distance_zero)
     
     cone_roots = Vector{Vector{nf_elem}}()
 
