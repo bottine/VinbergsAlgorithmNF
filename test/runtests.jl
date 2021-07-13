@@ -42,6 +42,7 @@ end
 if "long" in ARGS
     @info "long tests enabled"
     include("some_known_lattices/Bianchi.jl")
+    toggle(false)
     include("some_known_lattices/Bugaenko.jl")
 else
     @info "No long tests"
