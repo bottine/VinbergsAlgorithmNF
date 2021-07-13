@@ -11,7 +11,6 @@ toggle(false)
 
 VA = VinbergsAlgorithmNF
 
-
 ⊕ = VA.Lat.:(⊕)    
 
 K,a = Hecke.quadratic_field(2) # a is -√2
