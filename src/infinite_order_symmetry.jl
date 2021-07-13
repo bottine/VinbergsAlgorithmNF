@@ -51,104 +51,42 @@ function is_infinite_order_isometry(
 
 end
 
-function inf_ord_sym(vd,roots,das,type=:n_walls)
-    
-    if type === :n_walls
-        inf_ord_sym_n_walls(vd,roots,das)
-    elseif type === :n_plus_one_walls
-        inf_ord_sym_n_plus_one_walls(vd,roots,das)
-    elseif type === :vertices
-        inf_ord_sym_vertices(vd,roots,das)
-    end
 
+function inf_ord_sym(vd,roots,das,type=:n_walls)
+    if type === :n_plus_one_walls
+        return inf_ord_sym_n_plus_one_walls(vd,roots,das)
+    else
+        return inf_ord_sym_n_walls(vd,roots,das)
+    end
 end
 
 function inf_ord_sym_n_plus_one_walls(vd,roots,das)
-   
-    Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
-
-    candidates = [
-                  (labels,
-                   Gram[labels,labels],
-                   to_SimpleGraph_plus_colors(Gram,labels),
-                  ) for labels in Combinatorics.powerset(collect(1:length(roots)),vd.dim,vd.dim)
-                    if isinvertible(matrix(vd.field,hcat(roots[labels]...)))
-                 ]
-
-    grouped_candidates = Dict()
-    for c in candidates
-        ds = sort([collect(sort(g)) for g in eachcol(c[2])]) |> collect
-        if ds in keys(grouped_candidates)
-            push!(grouped_candidates[ds],c)
-        else
-            push!(grouped_candidates,ds=>[c])
-        end
-    end   
-
-
-    println("Number of candidate diagrams: $(sum(length.(values(grouped_candidates))))")
     
-    id = identity_matrix(vd.field,vd.dim)
-    
-    for candidates in values(grouped_candidates), pair in Combinatorics.powerset(candidates,1,2)
-        
-        c1 = pair[1]
-        c2 = length(pair) == 2 ? pair[2] : pair[1]
-
-
-        pairings = graph_pairings(vd,c1[3],c2[3])
-        
-        for p in pairings
-            
-            labels_pairs = [(c1[1][p],c2[1][q]) for (p,q) in p]
-                
-            m1 = matrix(vd.field,hcat(roots[[p[1] for p in labels_pairs]]...))
-            m2 = matrix(vd.field,hcat(roots[[p[2] for p in labels_pairs]]...))
-
-            t = m1 * inv(m2)
-
-            if t≠id && is_integral(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true)
-                display(labels_pairs)
-                return true
-            end
-
-
-        end
-    end
-
-    return false
-end
-
-
-
-function inf_ord_sym_vertices(vd,roots,das)
-   
     Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
     Gram_hash = hash.(Gram) 
 
+
     grouped_candidates = Dict{
                               Vector{Vector{UInt64}},
-                              Vector{Tuple{Vector{Int64}, Vector{nf_elem}, Matrix{nf_elem}, Tuple{LightGraphs.SimpleGraphs.SimpleGraph{Int64}, Dict{Any, Any}, Dict{Any, Any}}}}
+                              Vector{Tuple{Vector{Int64}, Matrix{nf_elem}, Tuple{LightGraphs.SimpleGraphs.SimpleGraph{Int64}, Dict{Any, Any}, Dict{Any, Any}}}}
                              }()
-    for labels in collect.(CoxeterDiagrams.all_spherical_of_rank(das,vd.dim-1))
+    for labels in  Combinatorics.powerset(collect(1:length(roots)),vd.dim,vd.dim)
         
         vectors = roots[labels]
-        if rank(matrix(vd.field,hcat(vectors...))) == vd.dim-1
+        if rank(matrix(vd.field,hcat(vectors...))) == vd.dim
             
             gram = Gram[labels,labels]
             gram_hash = Gram_hash[labels,labels]
-            last_vector = intersection_vector(vd,vectors)
-            @assert norm_squared(vd,last_vector) < 0
-
+            
             simple_graph_plus_colors = to_SimpleGraph_plus_colors(Gram,labels)
                
             group = sort([collect(sort(g)) for g in eachcol(gram_hash)]) |> collect
             if group in keys(grouped_candidates)
-                push!(grouped_candidates[group],(labels,last_vector,gram,simple_graph_plus_colors))
+                push!(grouped_candidates[group],(labels,gram,simple_graph_plus_colors))
             else
                 push!(
                     grouped_candidates,
-                    group => [(labels,last_vector,gram,simple_graph_plus_colors)]
+                    group => [(labels,gram,simple_graph_plus_colors)]
                 )
             end
         end
@@ -165,46 +103,21 @@ function inf_ord_sym_vertices(vd,roots,das)
         c1 = pair[1]
         c2 = length(pair) == 2 ? pair[2] : pair[1]
 
-        (labels1,last_vec1,gram1,graph1) = c1
-        (labels2,last_vec2,gram2,graph2) = c2
-        
-        
-        issq,sqrt = issquare(norm_squared(vd,last_vec1)//norm_squared(vd,last_vec2))
-        if !issq || sqrt ∉ vd.ring
-            continue
-        end
-        last_vec2 .*= sqrt
-        
-
-        if norm_squared(vd,last_vec1) ≠ norm_squared(vd,last_vec2)
-            continue
-        end
-
+        (labels1,gram1,graph1) = c1
+        (labels2,gram2,graph2) = c2
+   
         pairings = graph_pairings(vd,graph1,graph2)
         
-        for p in pairings, sg in [+1,-1]
+        for p in pairings
             
             labels_pairs = [(labels1[p],labels2[q]) for (p,q) in p]
                 
-            m1 = matrix(vd.field,hcat(last_vec1,roots[[p[1] for p in labels_pairs]]...))
-            m2 = matrix(vd.field,hcat(sg*last_vec2,roots[[p[2] for p in labels_pairs]]...))
-
-            @assert norm_squared(vd,sg*last_vec2) <  0
-            @assert all(times(vd,sg*last_vec2, r) == 0 for r in roots[[p[2] for p in labels_pairs]])
+            m1 = matrix(vd.field,hcat(roots[[p[1] for p in labels_pairs]]...))
+            m2 = matrix(vd.field,hcat(roots[[p[2] for p in labels_pairs]]...))
 
 
             t = m1 * inv(m2)
-            #=
-            display(m1)
-            display(m2)
 
-            for i in 1:vd.dim-1
-                display(roots[p[i][1]])
-                display(roots[p[i][2]])
-                @assert Matrix(t) * roots[p[i][1]] == roots[p[i][2]] 
-            end
-            =#
-            
 
             if t≠id && is_integral(vd,t) && preserves_upper_sheet(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true,true)
                 display(p)
@@ -216,20 +129,32 @@ function inf_ord_sym_vertices(vd,roots,das)
     end
 
     return false
-end
+
+
+ end
 
 
 
-function inf_ord_sym_n_walls(vd,roots,das)
+function inf_ord_sym_n_walls(vd,roots,das,type=:vertices)
    
     Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
     Gram_hash = hash.(Gram) 
+
+
+    subsets = begin
+        if type === :vertices
+            collect.(CoxeterDiagrams.all_spherical_of_rank(das,vd.dim-1))
+        elseif type === :n_walls
+            Combinatorics.powerset(collect(1:length(roots)),vd.dim-1,vd.dim-1)
+        end
+
+    end
 
     grouped_candidates = Dict{
                               Vector{Vector{UInt64}},
                               Vector{Tuple{Vector{Int64}, Vector{nf_elem}, Matrix{nf_elem}, Tuple{LightGraphs.SimpleGraphs.SimpleGraph{Int64}, Dict{Any, Any}, Dict{Any, Any}}}}
                              }()
-    for labels in Combinatorics.powerset(collect(1:length(roots)),vd.dim-1,vd.dim-1)
+    for labels in subsets 
         
         vectors = roots[labels]
         if rank(matrix(vd.field,hcat(vectors...))) == vd.dim-1
@@ -237,11 +162,12 @@ function inf_ord_sym_n_walls(vd,roots,das)
             gram = Gram[labels,labels]
             gram_hash = Gram_hash[labels,labels]
             last_vector = intersection_vector(vd,vectors)
+            type === :vertices && @assert norm_squared(vd,last_vector) < 0
             
             if norm_squared(vd,last_vector) == 0
                 continue
             end
-
+            
             simple_graph_plus_colors = to_SimpleGraph_plus_colors(Gram,labels)
                
             group = sort([collect(sort(g)) for g in eachcol(gram_hash)]) |> collect
@@ -291,22 +217,12 @@ function inf_ord_sym_n_walls(vd,roots,das)
             m1 = matrix(vd.field,hcat(last_vec1,roots[[p[1] for p in labels_pairs]]...))
             m2 = matrix(vd.field,hcat(sg*last_vec2,roots[[p[2] for p in labels_pairs]]...))
 
-            @assert norm_squared(vd,sg*last_vec2) ≠  0
+            type === :vertices && @assert norm_squared(vd,sg*last_vec2) <  0
             @assert all(times(vd,sg*last_vec2, r) == 0 for r in roots[[p[2] for p in labels_pairs]])
 
 
             t = m1 * inv(m2)
-            #=
-            display(m1)
-            display(m2)
 
-            for i in 1:vd.dim-1
-                display(roots[p[i][1]])
-                display(roots[p[i][2]])
-                @assert Matrix(t) * roots[p[i][1]] == roots[p[i][2]] 
-            end
-            =#
-            
 
             if t≠id && is_integral(vd,t) && preserves_upper_sheet(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true,true)
                 display(p)
