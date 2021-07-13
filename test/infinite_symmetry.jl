@@ -53,9 +53,11 @@ end
 
     for (mat,reflective) in cases
         vd = VinbergData(K,mat)
-        (st,(root,dict,das)) = VA.next_n_roots!(vd,n=10)
+        (st,(root,dict,das)) = VA.next_n_roots!(vd,n=20)
         @test st == reflective
-        @test VA.inf_ord_sym(vd,root,das,n_walls) != reflective
+        @test !VA.inf_ord_sym(vd,root,das,:n_walls) || VA.inf_ord_sym(vd,root,das,:vertices) 
+        @test VA.inf_ord_sym(vd,root,das,:n_walls) != reflective
+        #@test VA.inf_ord_sym(vd,root,das,:n_plus_one_walls) != reflective
     end
 
 end
