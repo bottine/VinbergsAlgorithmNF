@@ -96,7 +96,6 @@ end
 function diagonalize_in_field(field,A::Matrix,v₀=nothing)
     # returns T and D with D = T'GT
     # algorithm copied from there https://math.stackexchange.com/questions/1388421/reference-for-linear-algebra-books-that-teach-reverse-hermite-method-for-symmetr
-    # plus a gcd step to reduce the growth of values
     # plus the "Case 0" step to further reduce, but it's not enough
     @assert LinearAlgebra.issymmetric(A) "A must be symmetric."
 
