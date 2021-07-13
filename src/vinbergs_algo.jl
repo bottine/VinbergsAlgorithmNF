@@ -778,11 +778,32 @@ function roots_at_distance_zero(vd::VinbergData)
 end
 
 
-function cone_roots2(vd, roots_at_distance_zero=roots_at_distance_zero(vd))
-    
+function cone_roots(vd, roots_at_distance_zero=roots_at_distance_zero(vd),method=:baby_vinberg)
+    if method === :baby_vinberg
+        return cone_roots_baby_vinberg(vd,roots_at_distance_zero)
+    elseif method === :LP
+        return cone_roots_LP(vd,roots_at_distance_zero)
+    else
+        @assert "need valid cone root enumeration method"
+    end
+end
 
+function cone_roots_baby_vinberg(vd, roots_at_distance_zero=roots_at_distance_zero(vd))
+    
+    # Let's work in diagonal coordinates only:
+    # The basepoint `basepoint(vd)` has coordinates ``(1,0,…,0)``.
+    # The roots at distance zero must therefore have coordinates ``(0,something)``.
+    # Now, constructing the fundamental cone at ``(1,0,…,0)`` is the same as constructing a fundamental polyhedron _on its tangent sphere_.
+    # To do this, we choose a point on the tangent sphere, and construct the fundamental cone at that point, and then the remaining hyperplanes by increasing distance (same algo is Vinberg, but on the sphere).
+    # We can then repeat the process with a sphere of one dimension less, up to having a trivial sphere.
+    # Thus, we choose already our basepoint in each sphere: it's the one with first coordinate `1` and everything else zero.
+    # If ``r=(r₀,…,r_n)`` is a root, it's first non-zero coordinate will tell us in which dimension it's going to be enumerated not as a cone root, but as a "non-zero distance" one.
+    # Since we need all our basepoints to be in the _negative_ side of the root, we get the following filter:
+    
     roots = filter(r->r[findlast(≠(0),r)] < 0,roots_at_distance_zero)
 
+    # We can then order the roots, first on which is the dimension in which they get enumerated as non-cone roots, and if two roots are enumerated as non-cone roots for the same dimension, we must order them by distance.
+    # Similarly as how the distance is monotonous with k₀/l for roots at distance zero from `basepoint(vd)`, we get a simple expression ``r_i²/r²`` where ``r_i`` is the first non-zero coordinate.
     function my_order(r) 
         i = findlast(≠(0),r)
         d_i = vd.diagonal_values[i]
@@ -792,11 +813,12 @@ function cone_roots2(vd, roots_at_distance_zero=roots_at_distance_zero(vd))
 
     end
 
+    # We order our roots
     sort!(roots,by=my_order)
-    #display(roots)
     cone_roots = Vector{Vector{nf_elem}}()
 
     for r in roots
+        # and add only those with acute angles
         if all(times(vd,cr,r)≤0 for cr in cone_roots)
             push!(cone_roots,r)
         end
@@ -807,7 +829,7 @@ function cone_roots2(vd, roots_at_distance_zero=roots_at_distance_zero(vd))
 
 end
 
-function cone_roots(vd,roots_at_distance_zero)
+function cone_roots_LP(vd,roots_at_distance_zero=roots_at_distance_zero(vd))
 
     @warn "Cone roots computation are approximative ⇒ double check the results by hand."
     @warn "If results look dubious, increase LP precision by calling `VinbergsAlgorithm.Options.set_lp_precision(desired_precision::Int)` (currently $(Options.lp_precision()))"
@@ -853,9 +875,6 @@ function cone_roots(vd,roots_at_distance_zero)
 
 end
 
-function cone_roots(vd)
-    cone_roots(vd,roots_at_distance_zero(vd))
-end
 
 function roots_for_pair(vd,pair,prev_roots;t2_cache=nothing)
     
@@ -977,7 +996,7 @@ function next_n_roots!(
     vd::VinbergData;
     n=10,
 )
-    roots = cone_roots2(vd)
+    roots = cone_roots(vd)
 
     return next_n_roots!(vd,roots;n=n,t2_cache=nothing)
 end
