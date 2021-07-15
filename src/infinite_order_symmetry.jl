@@ -37,7 +37,8 @@ function is_infinite_order_isometry(
         gram_fixed_t = [c' * vd.gram_matrix.entries * d for c in eachcol(fixed_t.entries), d in eachcol(fixed_t.entries)]
         
         d,p = diagonalize_in_field(vd.field,gram_fixed_t)
-        
+       
+
         if any(v < 0 for v in LinearAlgebra.diag(d))
             return false 
         else
@@ -60,18 +61,32 @@ function inf_ord_sym(vd,roots,das,type=:n_walls)
     end
 end
 
-function inf_ord_sym_n_plus_one_walls(vd,roots,das)
+function inf_ord_sym_n_plus_one_walls(vd,roots,das,type=:vertices)
     
     Gram = [c' * vd.gram_matrix.entries * d for c in roots, d in roots]
     Gram_hash = hash.(Gram) 
+
+    vertices = collect.(CoxeterDiagrams.all_spherical_of_rank(das,vd.dim-1))
+
+    subsets = begin
+        if type === :vertices
+            [vertex∪[l] for vertex in vertices, l in 1:length(roots) if l ∉ vertex]
+        else
+            Combinatorics.powerset(collect(1:length(roots)),vd.dim,vd.dim)
+        end
+    end
 
 
     grouped_candidates = Dict{
                               Vector{Vector{UInt64}},
                               Vector{Tuple{Vector{Int64}, Matrix{nf_elem}, Tuple{LightGraphs.SimpleGraphs.SimpleGraph{Int64}, Dict{Any, Any}, Dict{Any, Any}}}}
                              }()
-    for labels in  Combinatorics.powerset(collect(1:length(roots)),vd.dim,vd.dim)
+    for labels in subsets 
         
+        if type === :vertices && ! any(v ⊆ labels for v in vertices) 
+            @assert false "should not be here"
+        end
+
         vectors = roots[labels]
         if rank(matrix(vd.field,hcat(vectors...))) == vd.dim
             
@@ -105,7 +120,9 @@ function inf_ord_sym_n_plus_one_walls(vd,roots,das)
 
         (labels1,gram1,graph1) = c1
         (labels2,gram2,graph2) = c2
-   
+  
+        
+
         pairings = graph_pairings(vd,graph1,graph2)
         
         for p in pairings
@@ -120,7 +137,8 @@ function inf_ord_sym_n_plus_one_walls(vd,roots,das)
 
 
             if t≠id && is_integral(vd,t) && preserves_upper_sheet(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true,true)
-                display(p)
+                display(labels_pairs)
+                display(t)
                 return true
             end
 
@@ -147,7 +165,6 @@ function inf_ord_sym_n_walls(vd,roots,das,type=:vertices)
         elseif type === :n_walls
             Combinatorics.powerset(collect(1:length(roots)),vd.dim-1,vd.dim-1)
         end
-
     end
 
     grouped_candidates = Dict{
@@ -225,7 +242,7 @@ function inf_ord_sym_n_walls(vd,roots,das,type=:vertices)
 
 
             if t≠id && is_integral(vd,t) && preserves_upper_sheet(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true,true)
-                display(p)
+                display(labels_pairs)
                 return true
             end
 
