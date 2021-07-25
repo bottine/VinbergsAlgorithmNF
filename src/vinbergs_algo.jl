@@ -299,8 +299,14 @@ function BoundedT2ElemsCache(vd::VinbergData)
     return BoundedT2ElemsCache(Vector{Int}([0]),Vector{Vector{Tuple{boxed_nf_elem,Vector{Interval{Float64}},fmpq,BitMatrix}}}([[(box(field(0)),get_enclosing_intervals_float64(field(0)),fmpq(0),crystal_matrix(vd,field(0)))]]))
 end
 
-function crystal_matrix(vd::VinbergData,sk)
-    return BitMatrix(sk* ex(vd.two_diago_over_scaling_times_length[l][j]) ∈ vd.ring for l in 1:length(vd.possible_root_norms_squared_up_to_squared_units), j in 1:vd.dim)
+function crystal_matrix(vd::VinbergData,sk;t=deepcopy(sk))
+    bm = BitMatrix(undef,length(vd.possible_root_norms_squared_up_to_squared_units),vd.dim)
+    for l in 1:length(vd.possible_root_norms_squared_up_to_squared_units), j in 1:vd.dim
+        mul!(t,sk,ex(vd.two_diago_over_scaling_times_length[l][j]))
+        bm[l,j] = (t ∈ vd.ring)
+    end
+    return bm
+    #return BitMatrix(sk* ex(vd.two_diago_over_scaling_times_length[l][j]) ∈ vd.ring for l in 1:length(vd.possible_root_norms_squared_up_to_squared_units), j in 1:vd.dim)
 end
 
 function bounded_t2_elems!(
@@ -310,6 +316,8 @@ function bounded_t2_elems!(
 )
     ring = vd.ring
     field = vd.field
+    
+    t = vd.field(0)
 
     int_bound = ceil(t2_bound)
     if int_bound > cache.bounds[end]
@@ -321,9 +329,8 @@ function bounded_t2_elems!(
         )
         @toggled_assert all(x≥0 for (x,t) in new_elems)
         @toggled_assert all(all(x[1] ≠ y[1] for y in cache.elems[end]) for x in new_elems)
-        
         # for each elem sk, we keep sk, its T₂ norm, lower bounds on the absolute values of the conjugates of sk, and each possible divisibility condition to check the crystallographic condition
-        new_elems_nf = map(x -> (box(x[1]),get_enclosing_intervals_float64(x[1]),x[2],crystal_matrix(vd,x[1])), new_elems)
+        new_elems_nf = map(x -> (box(x[1]),get_enclosing_intervals_float64(x[1]),x[2],crystal_matrix(vd,x[1],t=t)), new_elems)
         sort!(new_elems_nf,by=(x->lo(x[1])))
         sort!(new_elems_nf,by=(x->ex(x[1])))
         push!(cache.elems, new_elems_nf)

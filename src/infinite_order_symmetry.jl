@@ -139,14 +139,14 @@ function inf_ord_sym_n_plus_one_walls(vd,roots,das,type=:vertices)
             if t≠id && is_integral(vd,t) && preserves_upper_sheet(vd,t) && is_infinite_order_isometry(vd,t,true,true,true,true,true)
                 display(labels_pairs)
                 display(t)
-                return true
+                return (true, (labels_pairs, t))
             end
 
 
         end
     end
 
-    return false
+    return false, nothing
 
 
  end
