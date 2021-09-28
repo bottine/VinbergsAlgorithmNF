@@ -16,7 +16,7 @@ This is due to to the way the program handles non-diagonal matrices.
 
 ### Howto
 
-Assuming you have julia installed, it should go like this:
+Assuming you have julia installed (A recent version is needed, e.g. it works 1.6.3 but not 1.5.3), it should go like this:
 
 First, clone the repo:
 
