@@ -68,12 +68,6 @@ function VinbergData(number_field,gram_matrix,v₀=nothing)
 
     lengths = possible_root_norms_squared_up_to_squared_units(ring_of_integers, number_field, quad_space.gram) .|> (x -> x.elem_in_nf)
     
-    #= doesn't work (yet?)
-    if all(!has_primitive_root_of_length(ring_of_integers,quad_space.gram,l) for l in lengths) 
-        println!("NO ROOT")
-        @assert false
-    end
-    =#
 
     # Precomputations ---
     diago_over_scaling = [α.elem_in_nf//s.elem_in_nf for (α,s) in zip(diagonal_values,scaling)]::Vector{nf_elem} 

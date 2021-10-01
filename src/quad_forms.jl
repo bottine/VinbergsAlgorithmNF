@@ -215,18 +215,6 @@ function colinear(
 
 end
 
-function has_primitive_root_of_length(ring, gram, l) 
-    # 2Qr = lv iff 
-    # (Q⊕0 - 0⊕l*Id) * (r ⊕ v) = 0 
-    n = size(gram)[1]
-
-    M = matrix(ring, ring.([gram diagonal_matrix(ring(l), n)])) 
-
-    kerdim, ker = kernel(M)
-
-    return isunit(ring(elem_gcd(ring, ker[1:n,1:kerdim])))
-end
-
 
 
 function Gram_coeff(space, r₁, r₂)
