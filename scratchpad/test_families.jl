@@ -109,7 +109,7 @@ rows_K5bis = [
     (K5,2ϕ5⊕D(4),20,"2ϕ⊕D₄"),
     (K5,2ϕ5⊕D(5),20,"2ϕ⊕D₅"),
     (K5,2ϕ5⊕D(6),20,"2ϕ⊕D₆"),
-    (K5,2ϕ5⊕D(7),20,"2ϕ⊕D₇"),
+    (K5,2ϕ5⊕D(7),40,"2ϕ⊕D₇"),
     (K5,2ϕ5⊕A(4),20,"2ϕ⊕A₄"),
     (K5,2ϕ5⊕A(5),20,"2ϕ⊕A₅"),
     (K5,2ϕ5⊕A(6),20,"2ϕ⊕A₆"),
@@ -124,11 +124,21 @@ rows_K5bis = [
 rows_BP2 = [(ℚ,ℚ.(-k⊕A(3)),20,"-$k⊕A₃") for k in 1:18]
 rows_BP1 = [(ℚ,ℚ.(-2⊕A(2)⊕II(k)),16+k,"-2⊕A₂⊕I($k)") for k in 0:9]
 
+f = 8*x^3 + 4*x^2 - 4*x - 1
+Kcos,acos = Hecke.NumberField(f, "a")
+L, mL = simplify(Kcos)
+ϕ₂ = inv(mL)(acos) # = cos(6π/7)
+ϕ₀ = 2ϕ₂^2-1     # = cos(2π/7)
+ϕ₁ = 2ϕ₀^2-1     # = cos(4π/7)
+rows_cos = [(L,bd(-2ϕ₀,1,-4ϕ₀-10ϕ₁-14ϕ₂), 10, nothing),]
+
+
 families = [
-    ("moreK5", rows_K5bis),
     ("BP1",rows_BP1),
     ("BP2",rows_BP2),
+    ("cos",rows_cos),
     ("Bugaenko",rows_Bugaenko),
+    ("moreK5", rows_K5bis),
 ]
 
 for (name, rows) in families
