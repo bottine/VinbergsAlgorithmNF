@@ -43,7 +43,13 @@ using Pkg; Pkg.activate("."); Pkg.instantiate()
 ```
 
 This should install whatever is necessary.
-Then
+To run the tests (which takes some time and is not necessary):
+
+```julia
+Pkg.test()
+```
+
+Otherwise, to run an example:
 
 ```julia
 using Hecke
